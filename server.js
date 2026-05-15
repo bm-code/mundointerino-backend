@@ -9,7 +9,7 @@ connectDB();
 
 const app = express();
 
-// CORS — permite peticiones desde cualquier origen en producción
+// CORS
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -24,10 +24,17 @@ app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/pisos',    require('./routes/pisos'));
 app.use('/api/usuarios', require('./routes/usuarios'));
 
+// ✅ Ruta raíz
 app.get('/', (req, res) => {
   res.json({ mensaje: '✅ API Profinter funcionando correctamente' });
 });
 
+// ✅ Ruta health (necesaria para el keep-alive)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK' });
+});
+
+// Manejo de errores
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   res.status(500).json({ error: err.message });
@@ -37,3 +44,13 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });
+
+// ✅ Keep-alive para Railway (evita que duerma el servicio)
+const BACKEND_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : `http://localhost:${PORT}`;
+
+setInterval(() => {
+  fetch(`${BACKEND_URL}/api/health`)
+    .catch(() => {});
+}, 4 * 60 * 1000); // cada 4 minutos
