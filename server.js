@@ -11,10 +11,14 @@ connectDB();
 const app = express();
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  origin: [
+    'https://profinter-frontend.vercel.app',
+    'https://profinter-frontend-git-main-jose-maria-s-projects24.vercel.app',
+    /\.vercel\.app$/,
+    'http://localhost:5173'
+  ],
+  credentials: true
+}))
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
