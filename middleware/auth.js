@@ -1,111 +1,21 @@
-const express = require('express')
 const jwt = require('jsonwebtoken')
-const bcrypt = require('bcryptjs')
 const Usuario = require('../models/Usuario')
 
-const router = express.Router()
-
-const generarToken = usuario =>
-  jwt.sign(
-    {
-      id: usuario._id,
-      rol: usuario.rol,
-      verificacionEstado: usuario.verificacionEstado,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' }
-  )
-
-router.post('/registro', async (req, res) => {
+const proteger = async (req, res, next) => {
   try {
-    const {
-      nombre,
-      email,
-      password,
-      rol,
-      telefono,
-    } = req.body
-
-    if (!nombre || !email || !password) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios' })
+    const token = req.headers.authorization?.split(' ')[1]
+    if (!token) {
+      return res.status(401).json({ error: 'No autorizado, token requerido' })
     }
-
-    if (!['docente', 'propietario'].includes(rol)) {
-      return res.status(400).json({ error: 'Rol no válido' })
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    req.usuario = await Usuario.findById(decoded.id).select('-password')
+    if (!req.usuario) {
+      return res.status(401).json({ error: 'Usuario no encontrado' })
     }
-
-    const emailNormalizado = email.trim().toLowerCase()
-    const emailExistente = await Usuario.findOne({ email: emailNormalizado })
-
-    if (emailExistente) {
-      return res.status(400).json({ error: 'Ya existe un usuario con ese email' })
-    }
-
-    const usuario = await Usuario.create({
-      nombre: nombre.trim(),
-      email: emailNormalizado,
-      password,
-      rol,
-      telefono: telefono || '',
-      verificacionEstado: 'pendiente',
-    })
-
-    const token = generarToken(usuario)
-
-    return res.status(201).json({
-      token,
-      usuario: {
-        id: usuario._id,
-        nombre: usuario.nombre,
-        email: usuario.email,
-        rol: usuario.rol,
-        telefono: usuario.telefono,
-        verificacionEstado: usuario.verificacionEstado,
-      },
-    })
+    next()
   } catch (error) {
-    return res.status(500).json({ error: 'Error al registrar usuario' })
+    return res.status(401).json({ error: 'Token inválido o expirado' })
   }
-})
+}
 
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Faltan credenciales' })
-    }
-
-    const usuario = await Usuario.findOne({
-      email: email.trim().toLowerCase(),
-    })
-
-    if (!usuario) {
-      return res.status(400).json({ error: 'Credenciales incorrectas' })
-    }
-
-    const passwordValida = await bcrypt.compare(password, usuario.password)
-
-    if (!passwordValida) {
-      return res.status(400).json({ error: 'Credenciales incorrectas' })
-    }
-
-    const token = generarToken(usuario)
-
-    return res.json({
-      token,
-      usuario: {
-        id: usuario._id,
-        nombre: usuario.nombre,
-        email: usuario.email,
-        rol: usuario.rol,
-        telefono: usuario.telefono,
-        verificacionEstado: usuario.verificacionEstado,
-      },
-    })
-  } catch (error) {
-    return res.status(500).json({ error: 'Error al iniciar sesión' })
-  }
-})
-
-module.exports = router
+module.exports = { proteger }
