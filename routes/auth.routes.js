@@ -5,8 +5,8 @@ const Usuario = require('../models/Usuario')
 
 const router = express.Router()
 
-const generarToken = usuario =>
-  jwt.sign(
+const generarToken = usuario => {
+  return jwt.sign(
     {
       id: usuario._id,
       rol: usuario.rol,
@@ -15,6 +15,7 @@ const generarToken = usuario =>
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   )
+}
 
 router.post('/registro', async (req, res) => {
   try {
@@ -24,6 +25,7 @@ router.post('/registro', async (req, res) => {
       password,
       rol,
       telefono,
+      verificacionEstado = 'pendiente',
     } = req.body
 
     if (!nombre || !email || !password) {
@@ -34,10 +36,10 @@ router.post('/registro', async (req, res) => {
       return res.status(400).json({ error: 'Rol no válido' })
     }
 
-    const emailNormalizado = email.trim().toLowerCase()
-    const emailExistente = await Usuario.findOne({ email: emailNormalizado })
+    const emailNormalizado = email.toLowerCase().trim()
 
-    if (emailExistente) {
+    const existeUsuario = await Usuario.findOne({ email: emailNormalizado })
+    if (existeUsuario) {
       return res.status(400).json({ error: 'Ya existe un usuario con ese email' })
     }
 
@@ -47,7 +49,7 @@ router.post('/registro', async (req, res) => {
       password,
       rol,
       telefono: telefono || '',
-      verificacionEstado: 'pendiente',
+      verificacionEstado,
     })
 
     const token = generarToken(usuario)
@@ -64,7 +66,7 @@ router.post('/registro', async (req, res) => {
       },
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Error al registrar usuario' })
+    return res.status(500).json({ error: 'Error al registrarse' })
   }
 })
 
@@ -77,7 +79,7 @@ router.post('/login', async (req, res) => {
     }
 
     const usuario = await Usuario.findOne({
-      email: email.trim().toLowerCase(),
+      email: email.toLowerCase().trim(),
     })
 
     if (!usuario) {
@@ -85,7 +87,6 @@ router.post('/login', async (req, res) => {
     }
 
     const passwordValida = await bcrypt.compare(password, usuario.password)
-
     if (!passwordValida) {
       return res.status(400).json({ error: 'Credenciales incorrectas' })
     }
