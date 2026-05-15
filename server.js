@@ -2,6 +2,7 @@ const express   = require('express');
 const cors      = require('cors');
 const dotenv    = require('dotenv');
 const path      = require('path');
+const https     = require('https');
 const connectDB = require('./config/db');
 
 dotenv.config();
@@ -9,7 +10,6 @@ connectDB();
 
 const app = express();
 
-// CORS
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -24,33 +24,38 @@ app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/pisos',    require('./routes/pisos'));
 app.use('/api/usuarios', require('./routes/usuarios'));
 
-// ✅ Ruta raíz
 app.get('/', (req, res) => {
   res.json({ mensaje: '✅ API Profinter funcionando correctamente' });
 });
 
-// ✅ Ruta health (necesaria para el keep-alive)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
-// Manejo de errores
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   res.status(500).json({ error: err.message });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 8080;
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });
 
-// ✅ Keep-alive para Railway (evita que duerma el servicio)
-const BACKEND_URL = process.env.RAILWAY_PUBLIC_DOMAIN
-  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-  : `http://localhost:${PORT}`;
+// Keep-alive para Railway
+setTimeout(() => {
+  setInterval(() => {
+    if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+      https.get(`https://${process.env.RAILWAY_PUBLIC_DOMAIN}/api/health`, () => {}).on('error', () => {});
+    }
+  }, 4 * 60 * 1000);
+}, 30000);
 
-setInterval(() => {
-  fetch(`${BACKEND_URL}/api/health`)
-    .catch(() => {});
-}, 4 * 60 * 1000); // cada 4 minutos
+process.on('SIGTERM', () => {
+  console.log('SIGTERM recibido, cerrando servidor...');
+  server.close(() => {
+    console.log('Servidor cerrado correctamente');
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 10000);
+});
