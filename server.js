@@ -11,14 +11,26 @@ connectDB();
 const app = express();
 
 app.use(cors({
-  origin: [
-    'https://profinter-frontend.vercel.app',
-    'https://profinter-frontend-git-main-jose-maria-s-projects24.vercel.app',
-    /\.vercel\.app$/,
-    'http://localhost:5173'
-  ],
-  credentials: true
+  origin: function(origin, callback) {
+    const permitidos = [
+      'https://profinter-frontend.vercel.app',
+      'https://profinter-frontend-git-main-jose-maria-s-projects24.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:5174',
+    ]
+    // Permitir Vercel previews y peticiones sin origin (Postman, Railway health)
+    if (!origin || permitidos.includes(origin) || /\.vercel\.app$/.test(origin)) {
+      return callback(null, true)
+    }
+    callback(new Error('CORS no permitido: ' + origin))
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }))
+
+// Manejar preflight OPTIONS explícitamente
+app.options('*', cors())
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
