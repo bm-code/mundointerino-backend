@@ -66,7 +66,6 @@ router.post('/registro', async (req, res) => {
       },
     })
   } catch (error) {
-    console.error('ERROR REGISTRO:', error)
     return res.status(500).json({ error: error.message || 'Error al registrarse' })
   }
 })
