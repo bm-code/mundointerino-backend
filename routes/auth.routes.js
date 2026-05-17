@@ -43,10 +43,13 @@ router.post('/registro', async (req, res) => {
       return res.status(400).json({ error: 'Ya existe un usuario con ese email' })
     }
 
+    // ✅ Hash manual — sin depender del pre('save')
+    const passwordHash = await bcrypt.hash(password, 10)
+
     const usuario = await Usuario.create({
       nombre: nombre.trim(),
       email: emailNormalizado,
-      password,
+      password: passwordHash,
       rol,
       telefono: telefono || '',
       verificacionEstado,
