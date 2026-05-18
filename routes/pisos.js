@@ -37,7 +37,7 @@ const toArray = (val) => {
 // ─────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { ciudad, tipo, precioMax, habitaciones, pagina = 1, limite = 12 } = req.query
+    const { comunidad, provincia, ciudad, tipo, precioMax, habitaciones, pagina = 1, limite = 12 } = req.query
     const filtro = { activo: true }
 
     if (ciudad)       filtro.ciudad = new RegExp(ciudad, 'i')
@@ -118,24 +118,24 @@ router.get('/', async (req, res) => {
   }
 })
 
-// ─────────────────────────────────────────────────────────────
 // POST /api/pisos — Crear piso con fotos
-// ─────────────────────────────────────────────────────────────
 router.post('/', proteger, upload.array('imagenes', 8), async (req, res) => {
   try {
     console.log('FILES recibidos:', req.files?.length || 0)
-    const fotos    = req.files ? req.files.map(f => f.path) : []
+
+    const fotos = req.files ? req.files.map(f => f.path) : []
     const servicios = toArray(req.body.servicios)
 
     const piso = await Piso.create({
-  ...req.body,
-  comunidad: req.body.comunidad || '',
-  provincia: req.body.provincia || '',
-  servicios,
-  fotos,
-  propietario: req.usuario._id,
-  activo: true,
-})
+      ...req.body,
+      comunidad: req.body.comunidad || '',
+      provincia: req.body.provincia || '',
+      servicios,
+      fotos,
+      propietario: req.usuario._id,
+      activo: true,
+    })
+
     res.status(201).json(piso)
   } catch (error) {
     res.status(500).json({ error: error.message })
