@@ -78,12 +78,41 @@ router.get('/mis-pisos', proteger, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // GET /api/pisos/:id — Detalle de un piso
 // ─────────────────────────────────────────────────────────────
-router.get('/:id', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const piso = await Piso.findById(req.params.id)
+    const {
+      comunidad,
+      provincia,
+      ciudad,
+      tipo,
+      precioMax,
+      habitaciones,
+      pagina = 1,
+      limite = 12
+    } = req.query
+
+    const filtro = { activo: true }
+
+    if (comunidad) filtro.comunidad = new RegExp(comunidad, 'i')
+    if (provincia) filtro.provincia = new RegExp(provincia, 'i')
+    if (ciudad) filtro.ciudad = new RegExp(ciudad, 'i')
+    if (tipo) filtro.tipoEstancia = tipo
+    if (precioMax) filtro.precio = { $lte: parseInt(precioMax) }
+    if (habitaciones) filtro.habitaciones = parseInt(habitaciones)
+
+    const total = await Piso.countDocuments(filtro)
+    const pisos = await Piso.find(filtro)
       .populate('propietario', 'nombre telefono email')
-    if (!piso) return res.status(404).json({ error: 'Piso no encontrado' })
-    res.json(piso)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limite))
+      .skip((parseInt(pagina) - 1) * parseInt(limite))
+
+    res.json({
+      pisos,
+      total,
+      paginas: Math.ceil(total / parseInt(limite)),
+      paginaActual: parseInt(pagina)
+    })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -99,12 +128,14 @@ router.post('/', proteger, upload.array('imagenes', 8), async (req, res) => {
     const servicios = toArray(req.body.servicios)
 
     const piso = await Piso.create({
-      ...req.body,
-      servicios,
-      fotos,
-      propietario: req.usuario._id,
-      activo: true,
-    })
+  ...req.body,
+  comunidad: req.body.comunidad || '',
+  provincia: req.body.provincia || '',
+  servicios,
+  fotos,
+  propietario: req.usuario._id,
+  activo: true,
+})
     res.status(201).json(piso)
   } catch (error) {
     res.status(500).json({ error: error.message })

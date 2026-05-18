@@ -76,6 +76,18 @@ const pisoSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  comunidad: { 
+    type: String, 
+    default: '' 
+  },
+  provincia: { 
+    type: String, 
+    default: '' 
+  },
+  ciudad: { 
+    type: String, 
+    required: true 
+  },
   propietario: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Usuario',
