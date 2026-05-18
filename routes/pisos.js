@@ -15,7 +15,26 @@ const upload = multer({
   }
 });
 
+// Helper — borra fotos de Cloudinary por URL
+const borrarFotosCloudinary = async (urls = []) => {
+  if (!urls.length) return
+  await Promise.all(
+    urls.map(url => {
+      const publicId = url.split('/').slice(-2).join('/').replace(/\.[^.]+$/, '')
+      return cloudinary.uploader.destroy(publicId)
+    })
+  )
+}
+
+// Helper — normaliza campo array que viene de FormData
+const toArray = (val) => {
+  if (!val) return []
+  return Array.isArray(val) ? val : [val]
+}
+
+// ─────────────────────────────────────────────────────────────────
 // GET /api/pisos — Listar con filtros
+// ─────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
     const { ciudad, tipo, precioMax, habitaciones, pagina = 1, limite = 12 } = req.query;
@@ -44,7 +63,9 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────
 // GET /api/pisos/mis-pisos — Pisos del propietario autenticado
+// ─────────────────────────────────────────────────────────────────
 router.get('/mis-pisos', proteger, async (req, res) => {
   try {
     const pisos = await Piso.find({ propietario: req.usuario._id }).sort({ createdAt: -1 });
@@ -54,7 +75,9 @@ router.get('/mis-pisos', proteger, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────
 // GET /api/pisos/:id — Detalle de un piso
+// ─────────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id)
@@ -66,14 +89,17 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/pisos — Crear piso
+// ─────────────────────────────────────────────────────────────────
+// POST /api/pisos — Crear piso con fotos
+// ─────────────────────────────────────────────────────────────────
 router.post('/', proteger, upload.array('imagenes', 8), async (req, res) => {
   try {
-    // Cloudinary devuelve la URL pública en f.path
-    const fotos = req.files ? req.files.map(f => f.path) : [];
+    const fotos    = req.files ? req.files.map(f => f.path) : [];
+    const servicios = toArray(req.body.servicios);
 
     const piso = await Piso.create({
       ...req.body,
+      servicios,
       fotos,
       propietario: req.usuario._id,
       activo: true,
@@ -84,38 +110,73 @@ router.post('/', proteger, upload.array('imagenes', 8), async (req, res) => {
   }
 });
 
-// PUT /api/pisos/:id — Editar piso (sin cambiar fotos)
-router.put('/:id', proteger, async (req, res) => {
+// ─────────────────────────────────────────────────────────────────
+// PUT /api/pisos/:id — Editar piso + gestión de fotos
+// ─────────────────────────────────────────────────────────────────
+router.put('/:id', proteger, upload.array('imagenes', 8), async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id);
     if (!piso) return res.status(404).json({ error: 'Piso no encontrado' });
-    if (piso.propietario.toString() !== req.usuario._id.toString()) {
+    if (piso.propietario.toString() !== req.usuario._id.toString())
       return res.status(403).json({ error: 'No tienes permiso para editar este piso' });
-    }
-    const actualizado = await Piso.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+    // Fotos que el usuario conserva (las que NO eliminó en el frontend)
+    const fotosActuales = toArray(req.body.fotosActuales)
+
+    // Detectar fotos eliminadas por el usuario y borrarlas de Cloudinary
+    const fotosEliminadas = piso.fotos.filter(url => !fotosActuales.includes(url))
+    await borrarFotosCloudinary(fotosEliminadas)
+
+    // Fotos nuevas subidas a Cloudinary en esta petición
+    const fotasNuevas = req.files ? req.files.map(f => f.path) : []
+
+    // Servicios normalizados
+    const servicios = toArray(req.body.servicios)
+
+    // activo viene como string desde FormData
+    const activo = req.body.activo === 'true' || req.body.activo === true
+
+    const actualizado = await Piso.findByIdAndUpdate(
+      req.params.id,
+      {
+        titulo:       req.body.titulo,
+        descripcion:  req.body.descripcion,
+        ciudad:       req.body.ciudad,
+        barrio:       req.body.barrio,
+        contacto:     req.body.contacto,
+        precio:       req.body.precio,
+        precioDia:    req.body.precioDia,
+        fianza:       req.body.fianza,
+        habitaciones: req.body.habitaciones,
+        banos:        req.body.banos,
+        metros:       req.body.metros,
+        planta:       req.body.planta,
+        tipoEstancia: req.body.tipoEstancia,
+        disponible:   req.body.disponible,
+        servicios,
+        activo,
+        fotos: [...fotosActuales, ...fotasNuevas],
+      },
+      { new: true }
+    );
+
     res.json(actualizado);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// PUT /api/pisos/:id/fotos — Actualizar fotos del piso
+// ─────────────────────────────────────────────────────────────────
+// PUT /api/pisos/:id/fotos — Reemplazar TODAS las fotos
+// ─────────────────────────────────────────────────────────────────
 router.put('/:id/fotos', proteger, upload.array('imagenes', 8), async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id);
     if (!piso) return res.status(404).json({ error: 'Piso no encontrado' });
-    if (piso.propietario.toString() !== req.usuario._id.toString()) {
+    if (piso.propietario.toString() !== req.usuario._id.toString())
       return res.status(403).json({ error: 'No tienes permiso' });
-    }
 
-    // Borrar fotos antiguas de Cloudinary
-    if (piso.fotos?.length > 0) {
-      const deletePromises = piso.fotos.map(url => {
-        const publicId = url.split('/').slice(-2).join('/').replace(/\.[^.]+$/, '')
-        return cloudinary.uploader.destroy(publicId)
-      })
-      await Promise.all(deletePromises)
-    }
+    await borrarFotosCloudinary(piso.fotos)
 
     const fotos = req.files ? req.files.map(f => f.path) : [];
     const actualizado = await Piso.findByIdAndUpdate(req.params.id, { fotos }, { new: true });
@@ -125,14 +186,16 @@ router.put('/:id/fotos', proteger, upload.array('imagenes', 8), async (req, res)
   }
 });
 
-// PATCH /api/pisos/:id/disponibilidad — Cambiar disponibilidad
+// ─────────────────────────────────────────────────────────────────
+// PATCH /api/pisos/:id/disponibilidad — Toggle activo
+// ─────────────────────────────────────────────────────────────────
 router.patch('/:id/disponibilidad', proteger, async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id);
     if (!piso) return res.status(404).json({ error: 'Piso no encontrado' });
-    if (piso.propietario.toString() !== req.usuario._id.toString()) {
+    if (piso.propietario.toString() !== req.usuario._id.toString())
       return res.status(403).json({ error: 'No tienes permiso' });
-    }
+
     piso.activo = !piso.activo;
     await piso.save();
     res.json(piso);
@@ -141,24 +204,17 @@ router.patch('/:id/disponibilidad', proteger, async (req, res) => {
   }
 });
 
-// DELETE /api/pisos/:id — Eliminar piso y sus fotos de Cloudinary
+// ─────────────────────────────────────────────────────────────────
+// DELETE /api/pisos/:id — Eliminar piso y fotos de Cloudinary
+// ─────────────────────────────────────────────────────────────────
 router.delete('/:id', proteger, async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id);
     if (!piso) return res.status(404).json({ error: 'Piso no encontrado' });
-    if (piso.propietario.toString() !== req.usuario._id.toString()) {
+    if (piso.propietario.toString() !== req.usuario._id.toString())
       return res.status(403).json({ error: 'No tienes permiso' });
-    }
 
-    // Borrar fotos de Cloudinary al eliminar el piso
-    if (piso.fotos?.length > 0) {
-      const deletePromises = piso.fotos.map(url => {
-        const publicId = url.split('/').slice(-2).join('/').replace(/\.[^.]+$/, '')
-        return cloudinary.uploader.destroy(publicId)
-      })
-      await Promise.all(deletePromises)
-    }
-
+    await borrarFotosCloudinary(piso.fotos)
     await piso.deleteOne();
     res.json({ mensaje: 'Piso eliminado correctamente' });
   } catch (error) {
