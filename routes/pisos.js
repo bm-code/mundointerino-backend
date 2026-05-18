@@ -1,9 +1,9 @@
-const express  = require('express')
-const Piso     = require('../models/Piso')
+const express = require('express')
+const Piso = require('../models/Piso')
 const { proteger } = require('../middleware/auth')
-const multer   = require('multer')
+const multer = require('multer')
 const { cloudinary, storage } = require('../config/cloudinary')
-const router   = express.Router()
+const router = express.Router()
 
 const upload = multer({
   storage,
@@ -15,7 +15,6 @@ const upload = multer({
   }
 })
 
-// Helper — borra fotos de Cloudinary por URL
 const borrarFotosCloudinary = async (urls = []) => {
   if (!urls.length) return
   await Promise.all(
@@ -26,58 +25,12 @@ const borrarFotosCloudinary = async (urls = []) => {
   )
 }
 
-// Helper — normaliza campos array que vienen de FormData como string
 const toArray = (val) => {
   if (!val) return []
   return Array.isArray(val) ? val : [val]
 }
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/pisos — Listar con filtros
-// ─────────────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
-  try {
-    const { comunidad, provincia, ciudad, tipo, precioMax, habitaciones, pagina = 1, limite = 12 } = req.query
-    const filtro = { activo: true }
-
-    if (ciudad)       filtro.ciudad = new RegExp(ciudad, 'i')
-    if (tipo)         filtro.tipoEstancia = tipo
-    if (precioMax)    filtro.precio = { $lte: parseInt(precioMax) }
-    if (habitaciones) filtro.habitaciones = parseInt(habitaciones)
-
-    const total = await Piso.countDocuments(filtro)
-    const pisos = await Piso.find(filtro)
-      .populate('propietario', 'nombre telefono email')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limite))
-      .skip((parseInt(pagina) - 1) * parseInt(limite))
-
-    res.json({
-      pisos,
-      total,
-      paginas: Math.ceil(total / parseInt(limite)),
-      paginaActual: parseInt(pagina)
-    })
-  } catch (error) {
-    res.status(500).json({ error: error.message })
-  }
-})
-
-// ─────────────────────────────────────────────────────────────
-// GET /api/pisos/mis-pisos — Pisos del propietario autenticado
-// ─────────────────────────────────────────────────────────────
-router.get('/mis-pisos', proteger, async (req, res) => {
-  try {
-    const pisos = await Piso.find({ propietario: req.usuario._id }).sort({ createdAt: -1 })
-    res.json(pisos)
-  } catch (error) {
-    res.status(500).json({ error: error.message })
-  }
-})
-
-// ─────────────────────────────────────────────────────────────
-// GET /api/pisos/:id — Detalle de un piso
-// ─────────────────────────────────────────────────────────────
+// GET /api/pisos
 router.get('/', async (req, res) => {
   try {
     const {
@@ -118,11 +71,31 @@ router.get('/', async (req, res) => {
   }
 })
 
-// POST /api/pisos — Crear piso con fotos
+// GET /api/pisos/mis-pisos
+router.get('/mis-pisos', proteger, async (req, res) => {
+  try {
+    const pisos = await Piso.find({ propietario: req.usuario._id }).sort({ createdAt: -1 })
+    res.json(pisos)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// GET /api/pisos/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const piso = await Piso.findById(req.params.id)
+      .populate('propietario', 'nombre telefono email')
+    if (!piso) return res.status(404).json({ error: 'Piso no encontrado' })
+    res.json(piso)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// POST /api/pisos
 router.post('/', proteger, upload.array('imagenes', 8), async (req, res) => {
   try {
-    console.log('FILES recibidos:', req.files?.length || 0)
-
     const fotos = req.files ? req.files.map(f => f.path) : []
     const servicios = toArray(req.body.servicios)
 
@@ -142,9 +115,7 @@ router.post('/', proteger, upload.array('imagenes', 8), async (req, res) => {
   }
 })
 
-// ─────────────────────────────────────────────────────────────
-// PUT /api/pisos/:id — Editar piso + gestión de fotos
-// ─────────────────────────────────────────────────────────────
+// PUT /api/pisos/:id
 router.put('/:id', proteger, upload.array('imagenes', 8), async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id)
@@ -152,36 +123,32 @@ router.put('/:id', proteger, upload.array('imagenes', 8), async (req, res) => {
     if (piso.propietario.toString() !== req.usuario._id.toString())
       return res.status(403).json({ error: 'No tienes permiso para editar este piso' })
 
-    // Fotos que el usuario conserva
     const fotosActuales = toArray(req.body.fotosActuales)
-
-    // Borrar de Cloudinary las fotos que el usuario eliminó
     const fotosEliminadas = piso.fotos.filter(url => !fotosActuales.includes(url))
     await borrarFotosCloudinary(fotosEliminadas)
-
-    // Fotos nuevas subidas en esta petición
     const fotosNuevas = req.files ? req.files.map(f => f.path) : []
-
     const servicios = toArray(req.body.servicios)
-    const activo    = req.body.activo === 'true' || req.body.activo === true
+    const activo = req.body.activo === 'true' || req.body.activo === true
 
     const actualizado = await Piso.findByIdAndUpdate(
       req.params.id,
       {
-        titulo:       req.body.titulo,
-        descripcion:  req.body.descripcion,
-        ciudad:       req.body.ciudad,
-        barrio:       req.body.barrio,
-        contacto:     req.body.contacto,
-        precio:       req.body.precio,
-        precioDia:    req.body.precioDia,
-        fianza:       req.body.fianza,
+        titulo: req.body.titulo,
+        descripcion: req.body.descripcion,
+        comunidad: req.body.comunidad || '',
+        provincia: req.body.provincia || '',
+        ciudad: req.body.ciudad,
+        barrio: req.body.barrio,
+        contacto: req.body.contacto,
+        precio: req.body.precio,
+        precioDia: req.body.precioDia,
+        fianza: req.body.fianza,
         habitaciones: req.body.habitaciones,
-        banos:        req.body.banos,
-        metros:       req.body.metros,
-        planta:       req.body.planta,
+        banos: req.body.banos,
+        metros: req.body.metros,
+        planta: req.body.planta,
         tipoEstancia: req.body.tipoEstancia,
-        disponible:   req.body.disponible,
+        disponible: req.body.disponible,
         servicios,
         activo,
         fotos: [...fotosActuales, ...fotosNuevas],
@@ -195,9 +162,7 @@ router.put('/:id', proteger, upload.array('imagenes', 8), async (req, res) => {
   }
 })
 
-// ─────────────────────────────────────────────────────────────
-// PATCH /api/pisos/:id/disponibilidad — Toggle activo
-// ─────────────────────────────────────────────────────────────
+// PATCH /api/pisos/:id/disponibilidad
 router.patch('/:id/disponibilidad', proteger, async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id)
@@ -213,9 +178,7 @@ router.patch('/:id/disponibilidad', proteger, async (req, res) => {
   }
 })
 
-// ─────────────────────────────────────────────────────────────
-// DELETE /api/pisos/:id — Eliminar piso y fotos de Cloudinary
-// ─────────────────────────────────────────────────────────────
+// DELETE /api/pisos/:id
 router.delete('/:id', proteger, async (req, res) => {
   try {
     const piso = await Piso.findById(req.params.id)
