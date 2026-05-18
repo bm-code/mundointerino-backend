@@ -7,12 +7,12 @@ const Usuario = require('../models/Usuario')
 // REGISTRO
 router.post('/registro', async (req, res) => {
   try {
-    const { nombre, email, password, rol } = req.body
+    const { nombre, email, password, rol, telefono } = req.body
 
     const existe = await Usuario.findOne({ email })
     if (existe) return res.status(400).json({ error: 'El email ya está registrado' })
 
-    const usuario = new Usuario({ nombre, email, password, rol })
+    const usuario = new Usuario({ nombre, email, password, rol, telefono })
     await usuario.save()
 
     const token = jwt.sign(
@@ -27,7 +27,8 @@ router.post('/registro', async (req, res) => {
         id: usuario._id,
         nombre: usuario.nombre,
         email: usuario.email,
-        rol: usuario.rol
+        rol: usuario.rol,
+        verificacionEstado: usuario.verificacionEstado,
       }
     })
   } catch (error) {
@@ -59,7 +60,8 @@ router.post('/login', async (req, res) => {
         id: usuario._id,
         nombre: usuario.nombre,
         email: usuario.email,
-        rol: usuario.rol
+        rol: usuario.rol,
+        verificacionEstado: usuario.verificacionEstado,
       }
     })
   } catch (error) {
