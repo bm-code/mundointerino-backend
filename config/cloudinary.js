@@ -1,5 +1,6 @@
 const cloudinary = require('cloudinary').v2
 const { CloudinaryStorage } = require('multer-storage-cloudinary')
+const multer = require('multer')
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -7,7 +8,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
-const storage = new CloudinaryStorage({
+// Storage para fotos de pisos (ya existente)
+const storagePisos = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: 'mundointerino/pisos',
@@ -16,4 +18,26 @@ const storage = new CloudinaryStorage({
   },
 })
 
-module.exports = { cloudinary, storage }
+// Storage para documentos de verificación de interinos
+const storageVerificacion = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'mundointerino/verificaciones',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+    resource_type: 'auto', // necesario para PDFs
+  },
+})
+
+const uploadPiso         = multer({ storage: storagePisos })
+const uploadVerificacion = multer({
+  storage: storageVerificacion,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB máximo
+})
+
+// Exportamos todo — incluyendo `storage` para compatibilidad con código existente
+module.exports = {
+  cloudinary,
+  storage: storagePisos,       // alias legacy para las rutas de pisos
+  uploadPiso,
+  uploadVerificacion,
+}
