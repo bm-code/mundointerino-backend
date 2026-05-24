@@ -8,7 +8,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
-// Storage para fotos de pisos (ya existente)
+// Storage para fotos de pisos
 const storagePisos = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -18,26 +18,28 @@ const storagePisos = new CloudinaryStorage({
   },
 })
 
-// Storage para documentos de verificación de interinos
+// Storage para documentos de verificación — PDFs como 'raw', imágenes como 'image'
 const storageVerificacion = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: 'mundointerino/verificaciones',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-    resource_type: 'auto', // necesario para PDFs
+  params: async (req, file) => {
+    const esPDF = file.mimetype === 'application/pdf'
+    return {
+      folder: 'mundointerino/verificaciones',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+      resource_type: esPDF ? 'raw' : 'image',
+    }
   },
 })
 
-const uploadPiso         = multer({ storage: storagePisos })
+const uploadPiso = multer({ storage: storagePisos })
 const uploadVerificacion = multer({
   storage: storageVerificacion,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB máximo
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 })
 
-// Exportamos todo — incluyendo `storage` para compatibilidad con código existente
 module.exports = {
   cloudinary,
-  storage: storagePisos,       // alias legacy para las rutas de pisos
+  storage: storagePisos, // alias legacy para rutas de pisos
   uploadPiso,
   uploadVerificacion,
 }
