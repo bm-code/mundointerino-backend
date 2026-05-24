@@ -1,13 +1,13 @@
 const express  = require('express')
 const router   = express.Router()
 const Usuario  = require('../models/Usuario')
-const auth     = require('../middleware/auth')
+const { proteger, soloAdmin } = require('../middleware/auth')  // ← fix
 const { uploadVerificacion } = require('../config/cloudinary')
 
 // ─────────────────────────────────────────────
-// GET /api/usuarios/me — perfil del usuario autenticado
+// GET /api/usuarios/me
 // ─────────────────────────────────────────────
-router.get('/me', auth, async (req, res) => {
+router.get('/me', proteger, async (req, res) => {
   try {
     const usuario = await Usuario.findById(req.usuario.id).select('-password')
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
@@ -19,9 +19,9 @@ router.get('/me', auth, async (req, res) => {
 })
 
 // ─────────────────────────────────────────────
-// PUT /api/usuarios/me — actualizar datos personales
+// PUT /api/usuarios/me
 // ─────────────────────────────────────────────
-router.put('/me', auth, async (req, res) => {
+router.put('/me', proteger, async (req, res) => {
   try {
     const { nombre, email, telefono } = req.body
     const usuario = await Usuario.findByIdAndUpdate(
@@ -31,7 +31,6 @@ router.put('/me', auth, async (req, res) => {
     ).select('-password')
 
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
-
     res.json(usuario)
   } catch (err) {
     console.error(err)
@@ -41,27 +40,18 @@ router.put('/me', auth, async (req, res) => {
 
 // ─────────────────────────────────────────────
 // POST /api/usuarios/verificacion-docente
-// Sube documento de verificación (nómina, nombramiento, etc.)
 // ─────────────────────────────────────────────
 router.post(
   '/verificacion-docente',
-  auth,
+  proteger,
   uploadVerificacion.single('documento'),
   async (req, res) => {
     try {
       const { tipoDocumento, administracion } = req.body
 
-      if (!req.file) {
-        return res.status(400).json({ error: 'Debes adjuntar un documento' })
-      }
-
-      if (!tipoDocumento) {
-        return res.status(400).json({ error: 'Indica el tipo de documento' })
-      }
-
-      if (!administracion) {
-        return res.status(400).json({ error: 'Indica tu administración' })
-      }
+      if (!req.file)        return res.status(400).json({ error: 'Debes adjuntar un documento' })
+      if (!tipoDocumento)   return res.status(400).json({ error: 'Indica el tipo de documento' })
+      if (!administracion)  return res.status(400).json({ error: 'Indica tu administración' })
 
       const usuario = await Usuario.findByIdAndUpdate(
         req.usuario.id,
@@ -69,14 +59,17 @@ router.post(
           verificacionEstado: 'pendiente',
           tipoDocumento,
           administracion,
-          urlDocumento: req.file.path, // URL pública de Cloudinary
+          urlDocumento: req.file.path,
         },
         { new: true }
       ).select('-password')
 
       if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
 
-      res.json({ mensaje: 'Documentación enviada correctamente. Revisaremos tu perfil en 24-48h.', usuario })
+      res.json({
+        mensaje: 'Documentación enviada correctamente. Revisaremos tu perfil en 24-48h.',
+        usuario,
+      })
     } catch (err) {
       console.error(err)
       res.status(500).json({ error: 'Error al procesar la verificación' })
@@ -85,13 +78,10 @@ router.post(
 )
 
 // ─────────────────────────────────────────────
-// GET /api/usuarios — solo admin: listar todos los usuarios
+// GET /api/usuarios — solo admin
 // ─────────────────────────────────────────────
-router.get('/', auth, async (req, res) => {
+router.get('/', proteger, soloAdmin, async (req, res) => {
   try {
-    if (req.usuario.rol !== 'admin') {
-      return res.status(403).json({ error: 'Acceso denegado' })
-    }
     const usuarios = await Usuario.find().select('-password').sort({ createdAt: -1 })
     res.json(usuarios)
   } catch (err) {
@@ -103,12 +93,8 @@ router.get('/', auth, async (req, res) => {
 // ─────────────────────────────────────────────
 // PATCH /api/usuarios/:id/verificar — solo admin
 // ─────────────────────────────────────────────
-router.patch('/:id/verificar', auth, async (req, res) => {
+router.patch('/:id/verificar', proteger, soloAdmin, async (req, res) => {
   try {
-    if (req.usuario.rol !== 'admin') {
-      return res.status(403).json({ error: 'Acceso denegado' })
-    }
-
     const { estado, motivoRechazo } = req.body
 
     if (!['verificado', 'rechazado', 'pendiente'].includes(estado)) {
@@ -125,7 +111,6 @@ router.patch('/:id/verificar', auth, async (req, res) => {
     ).select('-password')
 
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
-
     res.json(usuario)
   } catch (err) {
     console.error(err)
