@@ -4,6 +4,7 @@ const dotenv    = require('dotenv');
 const path      = require('path');
 const https     = require('https');
 const connectDB = require('./config/db');
+const usuariosRoutes = require('./routes/usuarios');
 
 dotenv.config();
 connectDB();
@@ -13,8 +14,8 @@ const app = express();
 app.use(cors({
   origin: function(origin, callback) {
     const permitidos = [
-      'https://profinter-frontend.vercel.app',
-      'https://profinter-frontend-git-main-jose-maria-s-projects24.vercel.app',
+      'https://mundointerino-frontend.vercel.app',
+      'https://mundointerino-frontend-git-main-jose-maria-s-projects24.vercel.app',
       'http://localhost:5173',
       'http://localhost:5174',
     ]
@@ -39,9 +40,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth',     require('./routes/auth.routes'));
 app.use('/api/pisos',    require('./routes/pisos'));
 app.use('/api/usuarios', require('./routes/usuarios'));
+app.use('/api/usuarios', usuariosRoutes);
 
 app.get('/', (req, res) => {
-  res.json({ mensaje: '✅ API Profinter funcionando correctamente' });
+  res.json({ mensaje: '✅ API Mundointerino funcionando correctamente' });
 });
 
 app.get('/api/health', (req, res) => {
