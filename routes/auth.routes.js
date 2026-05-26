@@ -11,6 +11,7 @@ const generarToken = usuario => {
       id: usuario._id,
       rol: usuario.rol,
       verificacionEstado: usuario.verificacionEstado,
+      administracion: usuario.administracion, // ← AÑADIDO
     },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
@@ -43,7 +44,6 @@ router.post('/registro', async (req, res) => {
       return res.status(400).json({ error: 'Ya existe un usuario con ese email' })
     }
 
-    // ✅ Hash manual — sin depender del pre('save')
     const passwordHash = await bcrypt.hash(password, 10)
 
     const usuario = await Usuario.create({
@@ -66,6 +66,7 @@ router.post('/registro', async (req, res) => {
         rol: usuario.rol,
         telefono: usuario.telefono,
         verificacionEstado: usuario.verificacionEstado,
+        administracion: usuario.administracion, // ← AÑADIDO
       },
     })
   } catch (error) {
@@ -105,6 +106,7 @@ router.post('/login', async (req, res) => {
         rol: usuario.rol,
         telefono: usuario.telefono,
         verificacionEstado: usuario.verificacionEstado,
+        administracion: usuario.administracion, // ← AÑADIDO
       },
     })
   } catch (error) {
