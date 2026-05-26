@@ -1,7 +1,8 @@
 const express  = require('express')
 const router   = express.Router()
+const bcrypt   = require('bcryptjs')
 const Usuario  = require('../models/Usuario')
-const { proteger, soloAdmin } = require('../middleware/auth')  // ← fix
+const { proteger, soloAdmin } = require('../middleware/auth')
 const { uploadVerificacion } = require('../config/cloudinary')
 
 // ─────────────────────────────────────────────
@@ -35,6 +36,38 @@ router.put('/me', proteger, async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Error al actualizar el perfil' })
+  }
+})
+
+// ─────────────────────────────────────────────
+// PUT /api/usuarios/me/password  ← NUEVO
+// ─────────────────────────────────────────────
+router.put('/me/password', proteger, async (req, res) => {
+  try {
+    const { passwordActual, passwordNueva } = req.body
+
+    if (!passwordActual || !passwordNueva) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios' })
+    }
+    if (passwordNueva.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' })
+    }
+
+    const usuario = await Usuario.findById(req.usuario.id)
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
+
+    const passwordValida = await bcrypt.compare(passwordActual, usuario.password)
+    if (!passwordValida) {
+      return res.status(400).json({ error: 'La contraseña actual no es correcta' })
+    }
+
+    usuario.password = await bcrypt.hash(passwordNueva, 10)
+    await usuario.save()
+
+    res.json({ mensaje: 'Contraseña actualizada correctamente' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Error al cambiar la contraseña' })
   }
 })
 
