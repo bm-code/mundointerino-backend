@@ -1,3 +1,4 @@
+// auth.js 
 const jwt = require('jsonwebtoken')
 const Usuario = require('../models/Usuario')
 
@@ -26,4 +27,19 @@ const soloAdmin = (req, res, next) => {
   }
 }
 
-module.exports = { proteger, soloAdmin }
+// ── NUEVO ──────────────────────────────────────────────────────────────────
+const requireAdministracion = (...administracionesPermitidas) => (req, res, next) => {
+  const { administracion, verificacionEstado } = req.usuario
+
+  if (verificacionEstado !== 'verificado') {
+    return res.status(403).json({ error: 'Tu cuenta aún no está verificada' })
+  }
+
+  if (!administracionesPermitidas.includes(administracion)) {
+    return res.status(403).json({ error: 'Acceso restringido a tu administración' })
+  }
+
+  next()
+}
+
+module.exports = { proteger, soloAdmin, requireAdministracion }

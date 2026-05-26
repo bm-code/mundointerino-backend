@@ -37,7 +37,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 // ── Rutas ──────────────────────────────────────
 app.use('/api/auth',     require('./routes/auth.routes'))
 app.use('/api/pisos',    require('./routes/pisos'))
-app.use('/api/usuarios', require('./routes/usuarios'))  // ← una sola vez
+app.use('/api/usuarios', require('./routes/usuarios')) 
+app.use('/api/mundo',    require('./routes/mundo')) // ← una sola vez
 
 app.get('/', (req, res) => {
   res.json({ mensaje: '✅ API Mundointerino funcionando correctamente' })
