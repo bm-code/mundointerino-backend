@@ -57,6 +57,14 @@ async function bootstrap() {
   }, 30000)
 }
 
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error.message, error.stack)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason)
+})
+
 bootstrap().catch(err => {
   console.error('Error al iniciar servidor:', err)
   process.exit(1)

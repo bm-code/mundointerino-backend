@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/mongoose'
 import { NotFoundException } from '@nestjs/common'
 import { UsuariosService } from '../../src/modules/usuarios/usuarios.service'
+import { AutomatedVerificationService } from '../../src/modules/automated-verification/automated-verification.service'
 import * as bcrypt from 'bcryptjs'
 
 describe('UsuariosService', () => {
@@ -11,12 +12,20 @@ describe('UsuariosService', () => {
     findByIdAndUpdate: jest.fn(),
     find: jest.fn(),
   }
+  const mockAutomatedVerificationService = {
+    verifyDocument: jest.fn(),
+    applyVerificationResult: jest.fn(),
+  }
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsuariosService,
         { provide: getModelToken('Usuario'), useValue: mockUsuarioModel },
+        {
+          provide: AutomatedVerificationService,
+          useValue: mockAutomatedVerificationService,
+        },
       ],
     }).compile()
 

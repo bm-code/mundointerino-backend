@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { v2 as cloudinary } from 'cloudinary'
-import { CloudinaryStorage } from 'multer-storage-cloudinary'
 import * as multer from 'multer'
+import { verificationStorage, pisosStorage } from './cloudinary-storage'
 
 @Injectable()
 export class UploadService {
@@ -16,29 +16,8 @@ export class UploadService {
       api_secret: configService.get('CLOUDINARY_API_SECRET'),
     })
 
-    const storagePisos = new CloudinaryStorage({
-      cloudinary,
-      params: {
-        folder: 'mundointerino/pisos',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-        transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
-      } as any,
-    })
-
-    const storageVerificacion = new CloudinaryStorage({
-      cloudinary,
-      params: async (req, file) => {
-        const esPDF = file.mimetype === 'application/pdf'
-        return {
-          folder: 'mundointerino/verificaciones',
-          allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-          resource_type: esPDF ? 'raw' : 'image',
-        }
-      },
-    })
-
     this.uploadPiso = multer({
-      storage: storagePisos,
+      storage: pisosStorage,
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (req, file, cb) => {
         const permitidos = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
@@ -48,7 +27,7 @@ export class UploadService {
     })
 
     this.uploadVerificacion = multer({
-      storage: storageVerificacion,
+      storage: verificationStorage,
       limits: { fileSize: 10 * 1024 * 1024 },
     })
   }

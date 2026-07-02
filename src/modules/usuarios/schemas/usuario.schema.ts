@@ -26,7 +26,7 @@ export class Usuario {
   @Prop({ default: '' })
   motivoRechazo: string
 
-  @Prop({ enum: ['nomina', 'nombramiento', 'credencial', 'contrato'], default: null })
+  @Prop({ enum: ['nomina', 'nombramiento', 'credencial', 'contrato', 'certificado_servicios', 'resolucion'], default: null })
   tipoDocumento: string
 
   @Prop({ enum: ['educacion', 'sanidad', 'justicia', 'otros'], default: null })
@@ -34,6 +34,21 @@ export class Usuario {
 
   @Prop({ default: null })
   urlDocumento: string
+
+  @Prop({ default: null })
+  verificationConfidence: number
+
+  @Prop({ default: '' })
+  verificationNotes: string
+
+  @Prop({ default: null })
+  verificationDate: Date
+
+  @Prop({ enum: ['automatic', 'manual'], default: null })
+  verificationType: string
+
+  @Prop({ default: null })
+  ultimaSubidaDocumento: Date
 }
 
 export const UsuarioSchema = SchemaFactory.createForClass(Usuario)

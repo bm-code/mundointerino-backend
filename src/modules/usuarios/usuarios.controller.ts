@@ -4,12 +4,14 @@ import {
   Put,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
@@ -22,12 +24,15 @@ import { ChangePasswordDto } from './dto/change-password.dto'
 import { VerificacionDto } from './dto/verificacion.dto'
 import { VerificarUsuarioDto } from './dto/verificar-usuario.dto'
 import { UploadService } from '../cloudinary/cloudinary.service'
+import { verificationStorage } from '../cloudinary/cloudinary-storage'
+import { AutomatedVerificationService } from '../automated-verification/automated-verification.service'
 
 @Controller('usuarios')
 export class UsuariosController {
   constructor(
     private readonly usuariosService: UsuariosService,
     private readonly uploadService: UploadService,
+    private readonly automatedVerificationService: AutomatedVerificationService,
   ) {}
 
   @Get('me')
@@ -50,9 +55,15 @@ export class UsuariosController {
 
   @Post('verificacion-docente')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('documento'))
+  @UseInterceptors(
+    FileInterceptor('documento', {
+      storage: verificationStorage,
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
   async uploadVerificacion(
     @CurrentUser('_id') userId: string,
+    @CurrentUser('nombre') userName: string,
     @Body() dto: VerificacionDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
@@ -65,12 +76,20 @@ export class UsuariosController {
       dto.tipoDocumento,
       dto.administracion,
       urlDocumento,
+      userName || '',
     )
 
     return {
-      mensaje: 'Documentación enviada correctamente. Revisaremos tu perfil en 24-48h.',
+      mensaje: 'Documentación enviada. Verificando automáticamente...',
       usuario,
     }
+  }
+
+  @Delete('documento')
+  @UseGuards(JwtAuthGuard)
+  async deleteDocumento(@CurrentUser('_id') userId: string) {
+    await this.usuariosService.deleteDocumento(userId)
+    return { mensaje: 'Documento eliminado correctamente' }
   }
 
   @Get()
@@ -85,5 +104,36 @@ export class UsuariosController {
   @Roles('admin')
   verificar(@Param('id') id: string, @Body() dto: VerificarUsuarioDto) {
     return this.usuariosService.verificar(id, dto.estado, dto.motivoRechazo)
+  }
+
+  @Post(':id/re-verify')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async reverify(@Param('id') id: string) {
+    const usuario = await this.usuariosService.getProfile(id)
+    if (!usuario) throw new NotFoundException('Usuario no encontrado')
+    if (!usuario.urlDocumento)
+      throw new BadRequestException('El usuario no ha subido documentación')
+
+    const result = await this.automatedVerificationService.verifyDocument(
+      usuario.urlDocumento,
+      usuario.tipoDocumento,
+      usuario.administracion,
+      usuario.nombre,
+    )
+
+    await this.automatedVerificationService.applyVerificationResult(id, result)
+
+    return {
+      mensaje: 'Re-verificación completada',
+      result,
+    }
+  }
+
+  @Patch(':id/reset-upload-limit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  resetUploadLimit(@Param('id') id: string) {
+    return this.usuariosService.resetUploadLimit(id)
   }
 }

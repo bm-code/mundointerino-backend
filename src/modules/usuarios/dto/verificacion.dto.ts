@@ -2,7 +2,7 @@ import { IsString, IsIn } from 'class-validator'
 
 export class VerificacionDto {
   @IsString()
-  @IsIn(['nomina', 'nombramiento', 'credencial', 'contrato'])
+  @IsIn(['nomina', 'nombramiento', 'credencial', 'contrato', 'certificado_servicios', 'resolucion'])
   tipoDocumento: string
 
   @IsString()

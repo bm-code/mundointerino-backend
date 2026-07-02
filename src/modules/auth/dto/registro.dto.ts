@@ -1,4 +1,7 @@
-import { IsEmail, IsString, MinLength, IsOptional, IsIn } from 'class-validator'
+import { IsEmail, IsString, MinLength, IsOptional, IsIn, Matches } from 'class-validator'
+
+export const PASSWORD_REGEX =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])[A-Za-z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/
 
 export class RegistroDto {
   @IsString()
@@ -9,7 +12,11 @@ export class RegistroDto {
   email: string
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
+  @Matches(PASSWORD_REGEX, {
+    message:
+      'La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial',
+  })
   password: string
 
   @IsIn(['docente', 'propietario'])
@@ -18,4 +25,9 @@ export class RegistroDto {
   @IsOptional()
   @IsString()
   telefono?: string
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['pendiente'])
+  verificacionEstado?: string
 }
