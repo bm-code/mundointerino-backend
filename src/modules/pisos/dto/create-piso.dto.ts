@@ -9,6 +9,7 @@ import {
   Min,
   MaxLength,
 } from 'class-validator'
+import { Type } from 'class-transformer'
 
 export class CreatePisoDto {
   @IsString()
@@ -31,30 +32,36 @@ export class CreatePisoDto {
   @IsString()
   contacto?: string
 
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   precio: number
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   precioDia?: number
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   fianza?: number
 
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   habitaciones: number
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   banos?: number
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   metros?: number
