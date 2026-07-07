@@ -14,6 +14,8 @@ import {
 } from '@nestjs/common'
 import { FilesInterceptor } from '@nestjs/platform-express'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import { EmailVerifiedGuard } from '../../common/guards/email-verified.guard'
+import { RequireEmailVerified } from '../../common/decorators/require-email-verified.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { PisosService } from './pisos.service'
 import { CreatePisoDto } from './dto/create-piso.dto'
@@ -41,7 +43,8 @@ export class PisosController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
+  @RequireEmailVerified()
   @UseInterceptors(FilesInterceptor('imagenes', 8))
   async create(
     @Body() dto: CreatePisoDto,
@@ -52,7 +55,8 @@ export class PisosController {
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
+  @RequireEmailVerified()
   @UseInterceptors(FilesInterceptor('imagenes', 8))
   async update(
     @Param('id') id: string,
@@ -65,7 +69,8 @@ export class PisosController {
   }
 
   @Patch(':id/disponibilidad')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
+  @RequireEmailVerified()
   toggleDisponibilidad(
     @Param('id') id: string,
     @CurrentUser('_id') userId: string,
@@ -74,7 +79,8 @@ export class PisosController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
+  @RequireEmailVerified()
   remove(@Param('id') id: string, @CurrentUser('_id') userId: string) {
     return this.pisosService.remove(id, userId)
   }

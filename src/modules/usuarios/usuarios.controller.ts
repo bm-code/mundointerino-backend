@@ -11,7 +11,6 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  NotFoundException,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
@@ -25,14 +24,12 @@ import { VerificacionDto } from './dto/verificacion.dto'
 import { VerificarUsuarioDto } from './dto/verificar-usuario.dto'
 import { UploadService } from '../cloudinary/cloudinary.service'
 import { verificationStorage } from '../cloudinary/cloudinary-storage'
-import { AutomatedVerificationService } from '../automated-verification/automated-verification.service'
 
 @Controller('usuarios')
 export class UsuariosController {
   constructor(
     private readonly usuariosService: UsuariosService,
     private readonly uploadService: UploadService,
-    private readonly automatedVerificationService: AutomatedVerificationService,
   ) {}
 
   @Get('me')
@@ -109,25 +106,8 @@ export class UsuariosController {
   @Post(':id/re-verify')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async reverify(@Param('id') id: string) {
-    const usuario = await this.usuariosService.getProfile(id)
-    if (!usuario) throw new NotFoundException('Usuario no encontrado')
-    if (!usuario.urlDocumento)
-      throw new BadRequestException('El usuario no ha subido documentación')
-
-    const result = await this.automatedVerificationService.verifyDocument(
-      usuario.urlDocumento,
-      usuario.tipoDocumento,
-      usuario.administracion,
-      usuario.nombre,
-    )
-
-    await this.automatedVerificationService.applyVerificationResult(id, result)
-
-    return {
-      mensaje: 'Re-verificación completada',
-      result,
-    }
+  reverify(@Param('id') id: string) {
+    return this.usuariosService.reverify(id)
   }
 
   @Patch(':id/reset-upload-limit')

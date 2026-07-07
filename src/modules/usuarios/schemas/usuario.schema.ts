@@ -49,6 +49,39 @@ export class Usuario {
 
   @Prop({ default: null })
   ultimaSubidaDocumento: Date
+
+  @Prop({ type: Boolean, default: false, index: true })
+  emailVerificado: boolean
+
+  @Prop({ enum: ['pendiente', 'verificado', 'expirado'], default: 'pendiente' })
+  emailVerificacionEstado: string
+
+  @Prop({ default: null })
+  emailVerificacionTokenHash: string
+
+  @Prop({ default: null })
+  emailVerificacionExpira: Date
+
+  @Prop({ type: Number, default: 0 })
+  emailVerificacionIntentos: number
+
+  @Prop({ default: null })
+  ultimoReenvioVerificacion: Date
+
+  @Prop({ default: null })
+  emailVerificadoEn: Date
+
+  @Prop({ default: null })
+  verificationAttempts: number
+
+  @Prop({ default: '' })
+  verificationLastError: string
+
+  @Prop({ default: null })
+  verificationProvider: string
+
+  @Prop({ default: null })
+  verificationJobId: string
 }
 
 export const UsuarioSchema = SchemaFactory.createForClass(Usuario)

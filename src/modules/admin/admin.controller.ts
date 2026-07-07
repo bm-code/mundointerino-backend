@@ -7,7 +7,11 @@ import {
   Query,
   Body,
   UseGuards,
+  Res,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common'
+import { Response } from 'express'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
@@ -52,7 +56,21 @@ export class AdminController {
   impersonate(
     @Param('id') id: string,
     @CurrentUser('_id') adminId: string,
+    @CurrentUser('isImpersonating') isImpersonating: boolean,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.adminService.impersonate(adminId, id)
+    return this.adminService.impersonate(adminId.toString(), id, isImpersonating, res)
+  }
+
+  @Post('end-impersonation')
+  @HttpCode(HttpStatus.OK)
+  endImpersonation(
+    @CurrentUser('impersonatingUserId') impersonatingUserId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!impersonatingUserId) {
+      return { error: 'No estás impersonando a nadie' }
+    }
+    return this.adminService.endImpersonation(impersonatingUserId, res)
   }
 }

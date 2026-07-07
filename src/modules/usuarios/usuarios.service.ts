@@ -11,6 +11,7 @@ import { Usuario, UsuarioDocument } from './schemas/usuario.schema'
 import { UpdateUsuarioDto } from './dto/update-usuario.dto'
 import { ChangePasswordDto } from './dto/change-password.dto'
 import { AutomatedVerificationService } from '../automated-verification/automated-verification.service'
+import { VerificationDispatcher } from '../automated-verification/verification.dispatcher'
 
 @Injectable()
 export class UsuariosService {
@@ -19,6 +20,7 @@ export class UsuariosService {
   constructor(
     @InjectModel(Usuario.name) private usuarioModel: Model<UsuarioDocument>,
     private readonly automatedVerificationService: AutomatedVerificationService,
+    private readonly verificationDispatcher: VerificationDispatcher,
   ) {}
 
   async getProfile(userId: string) {
@@ -77,7 +79,7 @@ export class UsuariosService {
       .findByIdAndUpdate(
         userId,
         {
-          verificacionEstado: 'pendiente',
+          verificacionEstado: 'procesando',
           tipoDocumento,
           administracion,
           urlDocumento,
@@ -85,6 +87,8 @@ export class UsuariosService {
           verificationNotes: '',
           verificationDate: null,
           verificationType: null,
+          verificationAttempts: 0,
+          verificationLastError: '',
           ultimaSubidaDocumento: new Date(),
         },
         { new: true },
@@ -94,25 +98,20 @@ export class UsuariosService {
 
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
 
-    this.automatedVerificationService
-      .verifyDocument(urlDocumento, tipoDocumento, administracion, userName)
-      .then((result) => {
-        return this.automatedVerificationService.applyVerificationResult(
-          userId,
-          result,
-        )
-      })
-      .catch((error) => {
-        this.logger.error(
-          `Automated verification failed for user ${userId}: ${error.message}`,
-        )
-      })
+    this.verificationDispatcher.enqueue(
+      userId,
+      urlDocumento,
+      tipoDocumento,
+      administracion,
+      userName || '',
+    )
 
     return usuario
   }
 
   async verificar(id: string, estado: string, motivoRechazo?: string) {
-    if (!['verificado', 'rechazado', 'pendiente'].includes(estado)) {
+    const estadosValidos = ['verificado', 'rechazado', 'pendiente', 'procesando', 'pendiente-revision-manual']
+    if (!estadosValidos.includes(estado)) {
       throw new BadRequestException('Estado no válido')
     }
 
@@ -182,5 +181,31 @@ export class UsuariosService {
 
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
     return usuario
+  }
+
+  async reverify(id: string): Promise<{ mensaje: string }> {
+    const usuario = await this.usuarioModel.findById(id).select('-password').lean()
+    if (!usuario) throw new NotFoundException('Usuario no encontrado')
+    if (!usuario.urlDocumento) {
+      throw new BadRequestException('El usuario no ha subido documentación')
+    }
+
+    await this.usuarioModel
+      .findByIdAndUpdate(id, {
+        verificacionEstado: 'procesando',
+        verificationAttempts: 0,
+        verificationLastError: '',
+      })
+      .exec()
+
+    this.verificationDispatcher.enqueue(
+      id,
+      usuario.urlDocumento,
+      usuario.tipoDocumento,
+      usuario.administracion,
+      usuario.nombre,
+    )
+
+    return { mensaje: 'Re-verificación encolada' }
   }
 }

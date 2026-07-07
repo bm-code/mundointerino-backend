@@ -14,6 +14,9 @@ export class Piso {
   @Prop({ required: true, trim: true })
   ciudad: string
 
+  @Prop({ default: null, index: true })
+  ciudadSlug: string
+
   @Prop({ trim: true })
   barrio: string
 

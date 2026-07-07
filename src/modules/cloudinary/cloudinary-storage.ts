@@ -14,7 +14,7 @@ export const verificationStorage = new CloudinaryStorage({
     return {
       folder: 'mundointerino/verificaciones',
       allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-      resource_type: esPDF ? 'raw' : 'image',
+      resource_type: 'image',
     }
   },
 })

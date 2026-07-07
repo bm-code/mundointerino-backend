@@ -25,9 +25,4 @@ export class RegistroDto {
   @IsOptional()
   @IsString()
   telefono?: string
-
-  @IsOptional()
-  @IsString()
-  @IsIn(['pendiente'])
-  verificacionEstado?: string
 }

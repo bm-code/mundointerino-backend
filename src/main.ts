@@ -1,24 +1,37 @@
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import * as cookieParser from 'cookie-parser'
+import * as fs from 'fs'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/http-exception.filter'
 import * as https from 'https'
 
 async function bootstrap() {
+  const googleCredsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+  const googleCredsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  if (googleCredsPath && googleCredsJson && !fs.existsSync(googleCredsPath)) {
+    fs.writeFileSync(googleCredsPath, googleCredsJson, 'utf-8')
+    console.log(`Credenciales de Google escritas en ${googleCredsPath}`)
+  }
   const app = await NestFactory.create(AppModule)
+  const configService = app.get(ConfigService)
+
+  const expressApp = app.getHttpAdapter().getInstance() as any
+  expressApp.set('trust proxy', 1)
+  app.use(cookieParser())
+
+  const allowedOrigins: string[] = (
+    configService.get<string>('ALLOWED_ORIGINS') ||
+    'http://localhost:5173,http://localhost:5174'
+  )
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
 
   app.enableCors({
     origin: function (origin, callback) {
-      const permitidos = [
-        'https://mundointerino.com',
-        'https://www.mundointerino.com',
-        'https://mundointerino-frontend.vercel.app',
-        'https://mundointerino-frontend-git-main-jose-maria-s-projects24.vercel.app',
-        'http://localhost:5173',
-        'http://localhost:5174',
-      ]
-      if (!origin || permitidos.includes(origin) || /\.vercel\.app$/.test(origin)) {
+      if (!origin || allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) {
         return callback(null, true)
       }
       callback(new Error('CORS no permitido: ' + origin))
@@ -39,14 +52,12 @@ async function bootstrap() {
 
   app.useGlobalFilters(new AllExceptionsFilter())
 
-  const configService = app.get(ConfigService)
   const port = configService.get<number>('PORT') || 8080
 
   await app.listen(port, '0.0.0.0')
 
   console.log(`🚀 Servidor corriendo en puerto ${port}`)
 
-  // Keep-alive para Railway
   setTimeout(() => {
     setInterval(() => {
       const domain = configService.get<string>('RAILWAY_PUBLIC_DOMAIN')
@@ -70,7 +81,6 @@ bootstrap().catch(err => {
   process.exit(1)
 })
 
-// Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM recibido, cerrando servidor...')
   const app = await NestFactory.create(AppModule)

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model } from 'mongoose'
@@ -10,12 +11,25 @@ import { CreatePisoDto } from './dto/create-piso.dto'
 import { UpdatePisoDto } from './dto/update-piso.dto'
 import { QueryPisoDto } from './dto/query-piso.dto'
 import { UploadService } from '../cloudinary/cloudinary.service'
+import { CiudadesService } from '../ciudades/ciudades.service'
+
+function slugifyCiudad(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
 
 @Injectable()
 export class PisosService {
   constructor(
     @InjectModel(Piso.name) private pisoModel: Model<PisoDocument>,
     private readonly uploadService: UploadService,
+    private readonly ciudadesService: CiudadesService,
   ) {}
 
   async findAll(query: QueryPisoDto) {
@@ -70,10 +84,24 @@ export class PisosService {
     userId: string,
   ) {
     const fotos = files ? files.map(f => f.path) : []
+
+    let comunidad = dto.comunidad || ''
+    let provincia = dto.provincia || ''
+    let ciudadSlug = ''
+
+    const slug = slugifyCiudad(dto.ciudad)
+    const ciudad = await this.ciudadesService.porSlug(slug)
+    if (ciudad) {
+      comunidad = ciudad.comunidadNombre
+      provincia = ciudad.provinciaNombre
+      ciudadSlug = ciudad.slug
+    }
+
     const piso = await this.pisoModel.create({
       ...dto,
-      comunidad: dto.comunidad || '',
-      provincia: dto.provincia || '',
+      ciudadSlug,
+      comunidad,
+      provincia,
       servicios: dto.servicios || [],
       fotos,
       propietario: userId,
@@ -106,13 +134,28 @@ export class PisosService {
     const fotosNuevas = files ? files.map(f => f.path) : []
     const activo = dto.activoRaw === true || dto.activoRaw === 'true'
 
+    let comunidad = dto.comunidad || piso.comunidad || ''
+    let provincia = dto.provincia || piso.provincia || ''
+    let ciudadSlug = piso.ciudadSlug || ''
+
+    if (dto.ciudad) {
+      const slug = slugifyCiudad(dto.ciudad)
+      const ciudad = await this.ciudadesService.porSlug(slug)
+      if (ciudad) {
+        comunidad = ciudad.comunidadNombre
+        provincia = ciudad.provinciaNombre
+        ciudadSlug = ciudad.slug
+      }
+    }
+
     const actualizado = await this.pisoModel
       .findByIdAndUpdate(
         id,
         {
           ...dto,
-          comunidad: dto.comunidad || '',
-          provincia: dto.provincia || '',
+          ciudadSlug,
+          comunidad,
+          provincia,
           servicios: dto.servicios || [],
           activo,
           fotos: [...fotosActuales, ...fotosNuevas],
