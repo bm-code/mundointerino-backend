@@ -1,64 +1,66 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
-import { Anuncio, AnuncioDocument } from './schemas/anuncio.schema'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository, MoreThanOrEqual, IsNull } from 'typeorm'
+import { AnuncioEntity } from '../../database/entities/anuncio.entity'
 import { CreateAnuncioDto } from './dto/create-anuncio.dto'
 import { UpdateAnuncioDto } from './dto/update-anuncio.dto'
 import { QueryAnuncioDto } from './dto/query-anuncio.dto'
+import { randomUUID } from 'crypto'
 
 @Injectable()
 export class AnunciosService {
   constructor(
-    @InjectModel(Anuncio.name) private anuncioModel: Model<AnuncioDocument>,
+    @InjectRepository(AnuncioEntity) private anuncioRepo: Repository<AnuncioEntity>,
   ) {}
 
   async findAll(query: QueryAnuncioDto) {
     const { administracion, tipo, pagina = 1, limite = 20 } = query
-    const filter: any = { activo: true }
+    const baseFilter: any = { activo: true }
 
-    if (administracion) filter.administracion = administracion
-    if (tipo) filter.tipo = tipo
+    if (administracion) baseFilter.administracion = administracion
+    if (tipo) baseFilter.tipo = tipo
 
-    filter.$or = [
-      { fechaExpiracion: { $gte: new Date() } },
-      { fechaExpiracion: null },
-      { fechaExpiracion: { $exists: false } },
+    const where = [
+      { ...baseFilter, fechaExpiracion: MoreThanOrEqual(new Date()) },
+      { ...baseFilter, fechaExpiracion: IsNull() },
     ]
 
     const [anuncios, total] = await Promise.all([
-      this.anuncioModel
-        .find(filter)
-        .sort({ destacado: -1, createdAt: -1 })
-        .skip((pagina - 1) * limite)
-        .limit(limite)
-        .lean(),
-      this.anuncioModel.countDocuments(filter),
+      this.anuncioRepo.find({
+        where,
+        order: { destacado: 'DESC', createdAt: 'DESC' },
+        skip: (pagina - 1) * limite,
+        take: limite,
+      }),
+      this.anuncioRepo.count({ where }),
     ])
 
     return { anuncios, total, pagina, totalPaginas: Math.ceil(total / limite) }
   }
 
   async findOne(id: string) {
-    const anuncio = await this.anuncioModel.findById(id).lean()
+    const anuncio = await this.anuncioRepo.findOneBy({ id })
     if (!anuncio) throw new NotFoundException('Anuncio no encontrado')
     return anuncio
   }
 
   async create(dto: CreateAnuncioDto) {
-    return this.anuncioModel.create(dto)
+    const entity = this.anuncioRepo.create(dto as any) as unknown as AnuncioEntity
+    entity.id = randomUUID().replace(/-/g, '').substring(0, 24)
+    return this.anuncioRepo.save(entity)
   }
 
   async update(id: string, dto: UpdateAnuncioDto) {
-    const anuncio = await this.anuncioModel
-      .findByIdAndUpdate(id, dto, { new: true })
-      .lean()
+    await this.anuncioRepo.update(id, dto as any)
+    const anuncio = await this.anuncioRepo.findOneBy({ id })
     if (!anuncio) throw new NotFoundException('Anuncio no encontrado')
     return anuncio
   }
 
   async remove(id: string) {
-    const anuncio = await this.anuncioModel.findByIdAndDelete(id).lean()
+    const anuncio = await this.anuncioRepo.findOneBy({ id })
     if (!anuncio) throw new NotFoundException('Anuncio no encontrado')
+    await this.anuncioRepo.delete(id)
     return { mensaje: 'Anuncio eliminado correctamente' }
   }
 }

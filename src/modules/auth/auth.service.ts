@@ -6,14 +6,12 @@ import {
   ForbiddenException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import * as bcrypt from 'bcryptjs'
 import { randomUUID } from 'crypto'
 import { Response, Request } from 'express'
-import { Usuario, UsuarioDocument } from '../usuarios/schemas/usuario.schema'
+import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { RefreshTokenEntity } from '../../database/entities/refresh-token.entity'
 import { RegistroDto } from './dto/registro.dto'
 import { LoginDto } from './dto/login.dto'
@@ -45,7 +43,7 @@ export class AuthService {
   private readonly emailReenvioMaxIntentos: number
 
   constructor(
-    @InjectModel(Usuario.name) private usuarioModel: Model<UsuarioDocument>,
+    @InjectRepository(UsuarioEntity) private usuarioRepo: Repository<UsuarioEntity>,
     @InjectRepository(RefreshTokenEntity) private refreshTokenRepo: Repository<RefreshTokenEntity>,
     private jwtService: JwtService,
     private emailService: EmailService,
@@ -68,7 +66,7 @@ export class AuthService {
   async registro(dto: RegistroDto): Promise<{ mensaje: string }> {
     const emailNormalizado = dto.email.toLowerCase().trim()
 
-    const existe = await this.usuarioModel.findOne({ email: emailNormalizado })
+    const existe = await this.usuarioRepo.findOneBy({ email: emailNormalizado })
     if (existe) throw new ConflictException('Ya existe un usuario con ese email')
 
     if (!['docente', 'propietario'].includes(dto.rol)) {
@@ -77,7 +75,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10)
 
-    const usuario = await this.usuarioModel.create({
+    const usuario = this.usuarioRepo.create({
       nombre: dto.nombre.trim(),
       email: emailNormalizado,
       password: passwordHash,
@@ -88,16 +86,15 @@ export class AuthService {
       emailVerificacionEstado: 'pendiente',
       emailVerificacionIntentos: 0,
     })
+    usuario.id = randomUUID().replace(/-/g, '').substring(0, 24)
+    await this.usuarioRepo.save(usuario)
 
-    const token = this.emitirTokenVerificacionEmail(usuario._id.toString())
+    const token = this.emitirTokenVerificacionEmail(usuario.id)
 
-    await this.usuarioModel.updateOne(
-      { _id: usuario._id },
-      {
-        emailVerificacionExpira: new Date(Date.now() + this.emailVerificationTtlHours * 60 * 60 * 1000),
-        ultimoReenvioVerificacion: new Date(),
-      },
-    )
+    await this.usuarioRepo.update(usuario.id, {
+      emailVerificacionExpira: new Date(Date.now() + this.emailVerificationTtlHours * 60 * 60 * 1000),
+      ultimoReenvioVerificacion: new Date(),
+    })
 
     this.emailService.sendEmailVerification(emailNormalizado, token).catch((err) => {
       console.error('Error enviando email de verificación:', err.message)
@@ -111,7 +108,7 @@ export class AuthService {
       throw new BadRequestException('Faltan credenciales')
     }
 
-    const usuario = await this.usuarioModel.findOne({
+    const usuario = await this.usuarioRepo.findOneBy({
       email: dto.email.toLowerCase().trim(),
     })
 
@@ -122,7 +119,7 @@ export class AuthService {
 
     const familiaId = randomUUID()
     const accessToken = this.emitirAccessToken(usuario)
-    const refreshToken = await this.emitirRefreshToken(usuario._id.toString(), familiaId)
+    const refreshToken = await this.emitirRefreshToken(usuario.id, familiaId)
 
     setAuthCookies(res, { accessToken, refreshToken }, this.cookieConfig)
 
@@ -169,13 +166,13 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token expirado')
     }
 
-    const usuario = await this.usuarioModel.findById(payload.sub).select('-password').lean()
+    const usuario = await this.usuarioRepo.findOneBy({ id: payload.sub })
     if (!usuario) throw new UnauthorizedException('Usuario no encontrado')
 
     const newJti = randomUUID()
     const newAccessToken = this.emitirAccessToken(usuario)
     const newRefreshToken = this.jwtService.sign(
-      { sub: usuario._id.toString(), jti: newJti, familiaId: storedToken.familiaId, tipo: 'refresh' },
+      { sub: usuario.id, jti: newJti, familiaId: storedToken.familiaId, tipo: 'refresh' },
       { secret: this.jwtRefreshSecret, expiresIn: this.refreshExpiresIn as any },
     )
 
@@ -186,7 +183,7 @@ export class AuthService {
 
     await this.refreshTokenRepo.save({
       jti: newJti,
-      usuarioId: usuario._id.toString(),
+      usuarioId: usuario.id,
       familiaId: storedToken.familiaId,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     })
@@ -232,35 +229,29 @@ export class AuthService {
       throw new BadRequestException('Tipo de token no válido')
     }
 
-    const usuario = await this.usuarioModel.findById(payload.sub).select('-password').lean()
+    const usuario = await this.usuarioRepo.findOneBy({ id: payload.sub })
     if (!usuario) throw new BadRequestException('Usuario no encontrado')
 
     if (usuario.emailVerificado) {
       const accessToken = this.emitirAccessToken(usuario)
-      const refreshToken = await this.emitirRefreshToken(usuario._id.toString(), randomUUID())
+      const refreshToken = await this.emitirRefreshToken(usuario.id, randomUUID())
       setAuthCookies(res, { accessToken, refreshToken }, this.cookieConfig)
       return { usuario: this.usuarioPublico(usuario) }
     }
 
-    const actualizado = await this.usuarioModel
-      .findByIdAndUpdate(
-        payload.sub,
-        {
-          emailVerificado: true,
-          emailVerificacionEstado: 'verificado',
-          emailVerificacionTokenHash: null,
-          emailVerificacionExpira: null,
-          emailVerificadoEn: new Date(),
-        },
-        { new: true },
-      )
-      .select('-password')
-      .lean()
+    await this.usuarioRepo.update(payload.sub, {
+      emailVerificado: true,
+      emailVerificacionEstado: 'verificado',
+      emailVerificacionTokenHash: undefined,
+      emailVerificacionExpira: undefined,
+      emailVerificadoEn: new Date(),
+    })
 
+    const actualizado = await this.usuarioRepo.findOneBy({ id: payload.sub })
     if (!actualizado) throw new BadRequestException('Usuario no encontrado')
 
     const accessToken = this.emitirAccessToken(actualizado)
-    const refreshToken = await this.emitirRefreshToken(actualizado._id.toString(), randomUUID())
+    const refreshToken = await this.emitirRefreshToken(actualizado.id, randomUUID())
     setAuthCookies(res, { accessToken, refreshToken }, this.cookieConfig)
 
     return { usuario: this.usuarioPublico(actualizado) }
@@ -268,7 +259,7 @@ export class AuthService {
 
   async reenviarVerificacion(dto: ReenviarVerificacionDto): Promise<{ mensaje: string }> {
     const email = dto.email.toLowerCase().trim()
-    const usuario = await this.usuarioModel.findOne({ email })
+    const usuario = await this.usuarioRepo.findOneBy({ email })
 
     if (!usuario) {
       return { mensaje: 'email-enviado' }
@@ -289,16 +280,13 @@ export class AuthService {
       }
     }
 
-    const token = this.emitirTokenVerificacionEmail(usuario._id.toString())
+    const token = this.emitirTokenVerificacionEmail(usuario.id)
 
-    await this.usuarioModel.updateOne(
-      { _id: usuario._id },
-      {
-        emailVerificacionIntentos: (usuario.emailVerificacionIntentos || 0) + 1,
-        emailVerificacionExpira: new Date(Date.now() + this.emailVerificationTtlHours * 60 * 60 * 1000),
-        ultimoReenvioVerificacion: new Date(),
-      },
-    )
+    await this.usuarioRepo.update(usuario.id, {
+      emailVerificacionIntentos: (usuario.emailVerificacionIntentos || 0) + 1,
+      emailVerificacionExpira: new Date(Date.now() + this.emailVerificationTtlHours * 60 * 60 * 1000),
+      ultimoReenvioVerificacion: new Date(),
+    })
 
     this.emailService.sendEmailVerification(email, token).catch((err) => {
       console.error('Error reenviando email de verificación:', err.message)
@@ -310,7 +298,7 @@ export class AuthService {
   private emitirAccessToken(usuario: any): string {
     return this.jwtService.sign(
       {
-        sub: usuario._id.toString(),
+        sub: usuario.id,
         rol: usuario.rol,
         verificacionEstado: usuario.verificacionEstado,
         administracion: usuario.administracion,
@@ -346,7 +334,7 @@ export class AuthService {
 
   private usuarioPublico(usuario: any): UsuarioPublico {
     return {
-      id: usuario._id?.toString() || usuario.id,
+      id: usuario.id,
       nombre: usuario.nombre,
       email: usuario.email,
       rol: usuario.rol,

@@ -4,14 +4,12 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common'
-import { InjectModel } from '@nestjs/mongoose'
 import { InjectRepository } from '@nestjs/typeorm'
 import { JwtService } from '@nestjs/jwt'
-import { Model } from 'mongoose'
-import { Repository } from 'typeorm'
+import { Repository, Not, Like, MoreThanOrEqual } from 'typeorm'
 import { Response } from 'express'
 import { randomUUID } from 'crypto'
-import { UsuarioDocument } from '../usuarios/schemas/usuario.schema'
+import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { ImpersonationAuditEntity } from '../../database/entities/impersonation-audit.entity'
 import { RefreshTokenEntity } from '../../database/entities/refresh-token.entity'
 import { setAuthCookies, getCookieConfig, CookieConfig } from '../auth/cookies.util'
@@ -25,7 +23,7 @@ export class AdminService {
   private readonly cookieConfig: CookieConfig
 
   constructor(
-    @InjectModel('Usuario') private usuarioModel: Model<UsuarioDocument>,
+    @InjectRepository(UsuarioEntity) private usuarioRepo: Repository<UsuarioEntity>,
     @InjectRepository(ImpersonationAuditEntity) private auditRepo: Repository<ImpersonationAuditEntity>,
     @InjectRepository(RefreshTokenEntity) private refreshTokenRepo: Repository<RefreshTokenEntity>,
     private readonly jwtService: JwtService,
@@ -53,22 +51,21 @@ export class AdminService {
       usuariosRecientes,
       ultimosRegistrados,
     ] = await Promise.all([
-      this.usuarioModel.countDocuments(),
-      this.usuarioModel.countDocuments({ rol: 'docente' }),
-      this.usuarioModel.countDocuments({ rol: 'propietario' }),
-      this.usuarioModel.countDocuments({ rol: 'admin' }),
-      this.usuarioModel.countDocuments({ verificacionEstado: 'pendiente' }),
-      this.usuarioModel.countDocuments({ verificacionEstado: 'verificado' }),
-      this.usuarioModel.countDocuments({ verificacionEstado: 'rechazado' }),
-      this.usuarioModel.countDocuments({
-        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      this.usuarioRepo.count(),
+      this.usuarioRepo.count({ where: { rol: 'docente' } }),
+      this.usuarioRepo.count({ where: { rol: 'propietario' } }),
+      this.usuarioRepo.count({ where: { rol: 'admin' } }),
+      this.usuarioRepo.count({ where: { verificacionEstado: 'pendiente' } }),
+      this.usuarioRepo.count({ where: { verificacionEstado: 'verificado' } }),
+      this.usuarioRepo.count({ where: { verificacionEstado: 'rechazado' } }),
+      this.usuarioRepo.count({
+        where: { createdAt: MoreThanOrEqual(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) },
       }),
-      this.usuarioModel
-        .find()
-        .select('-password')
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .lean(),
+      this.usuarioRepo.find({
+        select: { id: true, nombre: true, email: true, rol: true, telefono: true, verificacionEstado: true, administracion: true, emailVerificado: true, createdAt: true },
+        order: { createdAt: 'DESC' },
+        take: 5,
+      }),
     ])
 
     return {
@@ -85,30 +82,33 @@ export class AdminService {
   }
 
   async getUsuarios(page = 1, limit = 20, filtro?: string, search?: string) {
-    const query: any = {}
+    const baseWhere: any = {}
 
     if (filtro && filtro !== 'todos') {
       if (['pendiente', 'verificado', 'rechazado', 'procesando', 'pendiente-revision-manual'].includes(filtro)) {
-        query.verificacionEstado = filtro
+        baseWhere.verificacionEstado = filtro
       } else if (['docente', 'propietario', 'admin'].includes(filtro)) {
-        query.rol = filtro
+        baseWhere.rol = filtro
       }
     }
 
+    let where: any = baseWhere
     if (search) {
-      const regex = new RegExp(search, 'i')
-      query.$or = [{ nombre: regex }, { email: regex }]
+      where = [
+        { ...baseWhere, nombre: Like('%' + search + '%') },
+        { ...baseWhere, email: Like('%' + search + '%') },
+      ]
     }
 
     const [usuarios, total] = await Promise.all([
-      this.usuarioModel
-        .find(query)
-        .select('-password')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      this.usuarioModel.countDocuments(query),
+      this.usuarioRepo.find({
+        where,
+        select: { id: true, nombre: true, email: true, rol: true, telefono: true, verificacionEstado: true, administracion: true, emailVerificado: true, createdAt: true, motivoRechazo: true },
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.usuarioRepo.count({ where }),
     ])
 
     return { usuarios, total, pagina: page, totalPaginas: Math.ceil(total / limit) }
@@ -127,10 +127,11 @@ export class AdminService {
       update.motivoRechazo = data.verificacionEstado === 'rechazado' ? data.motivoRechazo || '' : ''
     }
 
-    return this.usuarioModel
-      .findByIdAndUpdate(id, update, { new: true })
-      .select('-password')
-      .lean()
+    await this.usuarioRepo.update(id, update)
+    return this.usuarioRepo.findOne({
+      where: { id },
+      select: { id: true, nombre: true, email: true, rol: true, telefono: true, verificacionEstado: true, administracion: true, emailVerificado: true, createdAt: true, motivoRechazo: true },
+    })
   }
 
   async impersonate(adminId: string, targetId: string, isImpersonating: boolean, res: Response) {
@@ -142,7 +143,10 @@ export class AdminService {
       throw new ForbiddenException('No puedes impersonar mientras ya estás impersonando')
     }
 
-    const target = await this.usuarioModel.findById(targetId).select('-password').lean()
+    const target = await this.usuarioRepo.findOne({
+      where: { id: targetId },
+      select: { id: true, nombre: true, email: true, rol: true, telefono: true, verificacionEstado: true, administracion: true, emailVerificado: true },
+    })
     if (!target) throw new NotFoundException('Usuario no encontrado')
 
     const activeAudit = await this.auditRepo.findOne({ where: { adminId, status: 'active' } })
@@ -152,7 +156,7 @@ export class AdminService {
 
     const accessToken = this.jwtService.sign(
       {
-        sub: target._id.toString(),
+        sub: target.id,
         rol: target.rol,
         verificacionEstado: target.verificacionEstado,
         administracion: target.administracion,
@@ -166,7 +170,7 @@ export class AdminService {
     const jti = randomUUID()
     const refreshToken = this.jwtService.sign(
       {
-        sub: target._id.toString(),
+        sub: target.id,
         jti,
         familiaId,
         tipo: 'refresh',
@@ -177,14 +181,14 @@ export class AdminService {
 
     await this.refreshTokenRepo.save({
       jti,
-      usuarioId: target._id.toString(),
+      usuarioId: target.id,
       familiaId,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     })
 
     await this.auditRepo.save({
       adminId,
-      targetId: target._id.toString(),
+      targetId: target.id,
       startedAt: new Date(),
       status: 'active',
     })
@@ -193,7 +197,7 @@ export class AdminService {
 
     return {
       usuario: {
-        id: target._id,
+        id: target.id,
         nombre: target.nombre,
         email: target.email,
         rol: target.rol,
@@ -206,7 +210,10 @@ export class AdminService {
   }
 
   async endImpersonation(impersonatingUserId: string, res: Response) {
-    const admin = await this.usuarioModel.findById(impersonatingUserId).select('-password').lean()
+    const admin = await this.usuarioRepo.findOne({
+      where: { id: impersonatingUserId },
+      select: { id: true, nombre: true, email: true, rol: true, telefono: true, verificacionEstado: true, administracion: true, emailVerificado: true },
+    })
     if (!admin) throw new NotFoundException('Admin no encontrado')
 
     const activeAudit = await this.auditRepo.findOne({
@@ -228,7 +235,7 @@ export class AdminService {
 
     const accessToken = this.jwtService.sign(
       {
-        sub: admin._id.toString(),
+        sub: admin.id,
         rol: admin.rol,
         verificacionEstado: admin.verificacionEstado,
         administracion: admin.administracion,
@@ -240,13 +247,13 @@ export class AdminService {
     const familiaId = randomUUID()
     const jti = randomUUID()
     const refreshToken = this.jwtService.sign(
-      { sub: admin._id.toString(), jti, familiaId, tipo: 'refresh' },
+      { sub: admin.id, jti, familiaId, tipo: 'refresh' },
       { secret: this.jwtRefreshSecret, expiresIn: this.refreshExpiresIn as any },
     )
 
     await this.refreshTokenRepo.save({
       jti,
-      usuarioId: admin._id.toString(),
+      usuarioId: admin.id,
       familiaId,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     })
@@ -255,7 +262,7 @@ export class AdminService {
 
     return {
       usuario: {
-        id: admin._id,
+        id: admin.id,
         nombre: admin.nombre,
         email: admin.email,
         rol: admin.rol,

@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common'
-import { MongooseModule } from '@nestjs/mongoose'
+import { TypeOrmModule } from '@nestjs/typeorm'
 import { AnunciosController } from './anuncios.controller'
 import { AnunciosService } from './anuncios.service'
-import { AnuncioSchema } from './schemas/anuncio.schema'
+import { AnuncioEntity } from '../../database/entities/anuncio.entity'
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: 'Anuncio', schema: AnuncioSchema }]),
+    TypeOrmModule.forFeature([AnuncioEntity]),
   ],
   controllers: [AnunciosController],
   providers: [AnunciosService],

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common'
 import { APP_GUARD } from '@nestjs/core'
-import { ConfigModule, ConfigService } from '@nestjs/config'
-import { MongooseModule } from '@nestjs/mongoose'
+import { ConfigModule } from '@nestjs/config'
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
 import { AppController } from './app.controller'
 import { AuthModule } from './modules/auth/auth.module'
@@ -15,7 +14,6 @@ import { AutomatedVerificationModule } from './modules/automated-verification/au
 import { EmailModule } from './modules/email/email.module'
 import { CiudadesModule } from './modules/ciudades/ciudades.module'
 import { PostgresDatabaseModule } from './database/postgres.module'
-import databaseConfig from './config/database.config'
 import postgresConfig from './config/postgres.config'
 import redisConfig from './config/redis.config'
 import authConfig from './config/auth.config'
@@ -26,14 +24,7 @@ import verificationConfig from './config/verification.config'
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, postgresConfig, redisConfig, authConfig, emailConfig, verificationConfig],
-    }),
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGO_URI'),
-      }),
+      load: [postgresConfig, redisConfig, authConfig, emailConfig, verificationConfig],
     }),
     PostgresDatabaseModule,
     ThrottlerModule.forRoot({

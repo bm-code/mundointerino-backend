@@ -4,9 +4,10 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
-import { Piso, PisoDocument } from './schemas/piso.schema'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository, Like, LessThanOrEqual } from 'typeorm'
+import { PisoEntity } from '../../database/entities/piso.entity'
+import { randomUUID } from 'crypto'
 import { CreatePisoDto } from './dto/create-piso.dto'
 import { UpdatePisoDto } from './dto/update-piso.dto'
 import { QueryPisoDto } from './dto/query-piso.dto'
@@ -27,7 +28,7 @@ function slugifyCiudad(text: string): string {
 @Injectable()
 export class PisosService {
   constructor(
-    @InjectModel(Piso.name) private pisoModel: Model<PisoDocument>,
+    @InjectRepository(PisoEntity) private pisoRepo: Repository<PisoEntity>,
     private readonly uploadService: UploadService,
     private readonly ciudadesService: CiudadesService,
   ) {}
@@ -35,24 +36,25 @@ export class PisosService {
   async findAll(query: QueryPisoDto) {
     const filtro: any = { activo: true }
 
-    if (query.comunidad) filtro.comunidad = new RegExp(query.comunidad, 'i')
-    if (query.provincia) filtro.provincia = new RegExp(query.provincia, 'i')
-    if (query.ciudad) filtro.ciudad = new RegExp(query.ciudad, 'i')
+    if (query.comunidad) filtro.comunidad = Like(`%${query.comunidad}%`)
+    if (query.provincia) filtro.provincia = Like(`%${query.provincia}%`)
+    if (query.ciudad) filtro.ciudad = Like(`%${query.ciudad}%`)
     if (query.tipo) filtro.tipoEstancia = query.tipo
-    if (query.precioMax) filtro.precio = { $lte: query.precioMax }
+    if (query.precioMax) filtro.precio = LessThanOrEqual(query.precioMax)
     if (query.habitaciones) filtro.habitaciones = query.habitaciones
 
     const pagina = query.pagina || 1
     const limite = query.limite || 12
+    const skip = (pagina - 1) * limite
 
-    const total = await this.pisoModel.countDocuments(filtro)
-    const pisos = await this.pisoModel
-      .find(filtro)
-      .populate('propietario', 'nombre telefono email')
-      .sort({ createdAt: -1 })
-      .limit(limite)
-      .skip((pagina - 1) * limite)
-      .lean()
+    const total = await this.pisoRepo.count({ where: filtro })
+    const pisos = await this.pisoRepo.find({
+      where: filtro,
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limite,
+      relations: { propietario: true },
+    })
 
     return {
       pisos,
@@ -63,19 +65,19 @@ export class PisosService {
   }
 
   async findOne(id: string) {
-    const piso = await this.pisoModel
-      .findById(id)
-      .populate('propietario', 'nombre telefono email')
-      .lean()
+    const piso = await this.pisoRepo.findOne({
+      where: { id },
+      relations: { propietario: true },
+    })
     if (!piso) throw new NotFoundException('Piso no encontrado')
     return piso
   }
 
   async misPisos(userId: string) {
-    return this.pisoModel
-      .find({ propietario: userId })
-      .sort({ createdAt: -1 })
-      .lean()
+    return this.pisoRepo.find({
+      where: { propietarioId: userId },
+      order: { createdAt: 'DESC' },
+    })
   }
 
   async create(
@@ -97,17 +99,19 @@ export class PisosService {
       ciudadSlug = ciudad.slug
     }
 
-    const piso = await this.pisoModel.create({
+    const data = {
       ...dto,
       ciudadSlug,
       comunidad,
       provincia,
       servicios: dto.servicios || [],
       fotos,
-      propietario: userId,
+      propietarioId: userId,
       activo: true,
-    })
-    return piso.toObject()
+    }
+    const entity = this.pisoRepo.create(data)
+    entity.id = randomUUID().replace(/-/g, '').substring(0, 24)
+    return this.pisoRepo.save(entity)
   }
 
   async update(
@@ -116,9 +120,9 @@ export class PisosService {
     files: Express.Multer.File[],
     userId: string,
   ) {
-    const piso = await this.pisoModel.findById(id)
+    const piso = await this.pisoRepo.findOneBy({ id })
     if (!piso) throw new NotFoundException('Piso no encontrado')
-    if (piso.propietario.toString() !== userId) {
+    if (piso.propietarioId !== userId) {
       throw new ForbiddenException('No tienes permiso para editar este piso')
     }
 
@@ -148,46 +152,39 @@ export class PisosService {
       }
     }
 
-    const actualizado = await this.pisoModel
-      .findByIdAndUpdate(
-        id,
-        {
-          ...dto,
-          ciudadSlug,
-          comunidad,
-          provincia,
-          servicios: dto.servicios || [],
-          activo,
-          fotos: [...fotosActuales, ...fotosNuevas],
-        },
-        { new: true },
-      )
-      .lean()
+    await this.pisoRepo.update(id, {
+      ...dto,
+      ciudadSlug,
+      comunidad,
+      provincia,
+      servicios: dto.servicios || [],
+      activo,
+      fotos: [...fotosActuales, ...fotosNuevas],
+    })
 
-    return actualizado
+    return this.pisoRepo.findOneBy({ id })
   }
 
   async toggleDisponibilidad(id: string, userId: string) {
-    const piso = await this.pisoModel.findById(id)
+    const piso = await this.pisoRepo.findOneBy({ id })
     if (!piso) throw new NotFoundException('Piso no encontrado')
-    if (piso.propietario.toString() !== userId) {
+    if (piso.propietarioId !== userId) {
       throw new ForbiddenException('No tienes permiso')
     }
 
-    piso.activo = !piso.activo
-    await piso.save()
-    return piso.toObject()
+    await this.pisoRepo.update(id, { activo: !piso.activo })
+    return this.pisoRepo.findOneBy({ id })
   }
 
   async remove(id: string, userId: string) {
-    const piso = await this.pisoModel.findById(id)
+    const piso = await this.pisoRepo.findOneBy({ id })
     if (!piso) throw new NotFoundException('Piso no encontrado')
-    if (piso.propietario.toString() !== userId) {
+    if (piso.propietarioId !== userId) {
       throw new ForbiddenException('No tienes permiso')
     }
 
     await this.uploadService.deleteImages(piso.fotos)
-    await piso.deleteOne()
+    await this.pisoRepo.delete(id)
     return { mensaje: 'Piso eliminado correctamente' }
   }
 }

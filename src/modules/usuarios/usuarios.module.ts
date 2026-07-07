@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common'
-import { MongooseModule } from '@nestjs/mongoose'
+import { TypeOrmModule } from '@nestjs/typeorm'
 import { UsuariosController } from './usuarios.controller'
 import { UsuariosService } from './usuarios.service'
-import { UsuarioSchema } from './schemas/usuario.schema'
+import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { CloudinaryModule } from '../cloudinary/cloudinary.module'
 import { AutomatedVerificationModule } from '../automated-verification/automated-verification.module'
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: 'Usuario', schema: UsuarioSchema }]),
+    TypeOrmModule.forFeature([UsuarioEntity]),
     CloudinaryModule,
     AutomatedVerificationModule,
   ],

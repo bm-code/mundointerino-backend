@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
-import { UsuarioDocument } from '../usuarios/schemas/usuario.schema'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import {
   DOCUMENT_RULES,
   INTERINO_GENERAL_KEYWORDS,
@@ -23,7 +23,7 @@ export class AutomatedVerificationService {
   private readonly minTextLength: number
 
   constructor(
-    @InjectModel('Usuario') private usuarioModel: Model<UsuarioDocument>,
+    @InjectRepository(UsuarioEntity) private usuarioRepo: Repository<UsuarioEntity>,
     private configService: ConfigService,
     @Inject(OCR_PROVIDER) private ocrProvider: OcrProvider,
     private emailService: EmailService,
@@ -99,7 +99,7 @@ export class AutomatedVerificationService {
       motivoRechazo = result.notes
     }
 
-    await this.usuarioModel.findByIdAndUpdate(userId, {
+    await this.usuarioRepo.update(userId, {
       verificacionEstado: estado,
       verificationConfidence: result.confidence,
       verificationNotes: result.notes,
@@ -116,9 +116,9 @@ export class AutomatedVerificationService {
 
     if (estado === 'pendiente-revision-manual') {
       try {
-        const usuario = await this.usuarioModel.findById(userId).select('nombre email tipoDocumento administracion').lean()
-        const admins = await this.usuarioModel.find({ rol: 'admin' }).select('email').lean()
-        const adminEmails = admins.map((a: any) => a.email).filter(Boolean)
+        const usuario = await this.usuarioRepo.findOne({ where: { id: userId }, select: { nombre: true, email: true, tipoDocumento: true, administracion: true } })
+        const admins = await this.usuarioRepo.find({ where: { rol: 'admin' }, select: { email: true } })
+        const adminEmails = admins.map((a) => a.email).filter(Boolean)
 
         if (adminEmails.length > 0 && usuario) {
           await this.emailService.sendManualReviewNotification(adminEmails, {

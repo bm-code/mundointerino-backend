@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
-import { MongooseModule } from '@nestjs/mongoose'
+import { TypeOrmModule } from '@nestjs/typeorm'
 import { AutomatedVerificationService } from './automated-verification.service'
 import { VerificationDispatcher } from './verification.dispatcher'
-import { UsuarioSchema } from '../usuarios/schemas/usuario.schema'
+import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { EmailModule } from '../email/email.module'
 import { OcrProvider, OCR_PROVIDER } from './ocr/ocr-provider.interface'
 import { createOcrProvider } from './ocr/ocr-provider.factory'
@@ -12,7 +12,7 @@ import verificationConfig from '../../config/verification.config'
 @Module({
   imports: [
     ConfigModule.forFeature(verificationConfig),
-    MongooseModule.forFeature([{ name: 'Usuario', schema: UsuarioSchema }]),
+    TypeOrmModule.forFeature([UsuarioEntity]),
     EmailModule,
   ],
   providers: [

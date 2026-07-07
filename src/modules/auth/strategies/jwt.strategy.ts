@@ -1,11 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common'
 import { PassportStrategy } from '@nestjs/passport'
 import { Strategy } from 'passport-jwt'
-import { ConfigService } from '@nestjs/config'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
 import { Request } from 'express'
-import { Usuario, UsuarioDocument } from '../../usuarios/schemas/usuario.schema'
+import { UsuarioEntity } from '../../../database/entities/usuario.entity'
 
 export interface JwtPayload {
   sub: string
@@ -19,8 +18,7 @@ export interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    configService: ConfigService,
-    @InjectModel(Usuario.name) private usuarioModel: Model<UsuarioDocument>,
+    @InjectRepository(UsuarioEntity) private usuarioRepo: Repository<UsuarioEntity>,
   ) {
     const secret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET
     if (!secret) {
@@ -38,15 +36,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Tipo de token no válido para sesión')
     }
 
-    const usuario = await this.usuarioModel
-      .findById(payload.sub)
-      .select('-password')
-      .lean()
+    const usuario = await this.usuarioRepo.findOne({
+      where: { id: payload.sub },
+    })
 
     if (!usuario) throw new UnauthorizedException('Usuario no encontrado')
+    const { password, ...result } = usuario
 
     return {
-      ...usuario,
+      ...result,
       isImpersonating: !!payload.impersonatingUserId,
       impersonatingUserId: payload.impersonatingUserId || null,
     }

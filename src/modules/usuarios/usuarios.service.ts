@@ -4,10 +4,10 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
 import * as bcrypt from 'bcryptjs'
-import { Usuario, UsuarioDocument } from './schemas/usuario.schema'
+import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { UpdateUsuarioDto } from './dto/update-usuario.dto'
 import { ChangePasswordDto } from './dto/change-password.dto'
 import { AutomatedVerificationService } from '../automated-verification/automated-verification.service'
@@ -18,41 +18,43 @@ export class UsuariosService {
   private readonly logger = new Logger(UsuariosService.name)
 
   constructor(
-    @InjectModel(Usuario.name) private usuarioModel: Model<UsuarioDocument>,
+    @InjectRepository(UsuarioEntity) private usuarioRepo: Repository<UsuarioEntity>,
     private readonly automatedVerificationService: AutomatedVerificationService,
     private readonly verificationDispatcher: VerificationDispatcher,
   ) {}
 
   async getProfile(userId: string) {
-    const usuario = await this.usuarioModel.findById(userId).select('-password').lean()
+    const usuario = await this.usuarioRepo.findOneBy({ id: userId })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
-    return usuario
+    const { password, ...result } = usuario
+    return result
   }
 
   async updateProfile(userId: string, dto: UpdateUsuarioDto) {
-    const usuario = await this.usuarioModel
-      .findByIdAndUpdate(userId, dto, { new: true, runValidators: true })
-      .select('-password')
-      .lean()
+    const usuario = await this.usuarioRepo.findOneBy({ id: userId })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
-    return usuario
+    Object.assign(usuario, dto)
+    const saved = await this.usuarioRepo.save(usuario)
+    const { password, ...result } = saved
+    return result
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
-    const usuario = await this.usuarioModel.findById(userId)
+    const usuario = await this.usuarioRepo.findOneBy({ id: userId })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
 
     const valida = await bcrypt.compare(dto.passwordActual, usuario.password)
     if (!valida) throw new BadRequestException('La contraseña actual no es correcta')
 
     usuario.password = await bcrypt.hash(dto.passwordNueva, 10)
-    await usuario.save()
+    await this.usuarioRepo.save(usuario)
 
     return { mensaje: 'Contraseña actualizada correctamente' }
   }
 
   async findAll() {
-    return this.usuarioModel.find().select('-password').sort({ createdAt: -1 }).lean()
+    const usuarios = await this.usuarioRepo.find({ order: { createdAt: 'DESC' } })
+    return usuarios.map(({ password, ...u }) => u)
   }
 
   async uploadVerificacion(
@@ -62,12 +64,12 @@ export class UsuariosService {
     urlDocumento: string,
     userName: string,
   ) {
-    const usuarioActual = await this.usuarioModel.findById(userId)
-    if (!usuarioActual) throw new NotFoundException('Usuario no encontrado')
+    const usuario = await this.usuarioRepo.findOneBy({ id: userId })
+    if (!usuario) throw new NotFoundException('Usuario no encontrado')
 
-    if (usuarioActual.ultimaSubidaDocumento) {
+    if (usuario.ultimaSubidaDocumento) {
       const horasDesdeUltimaSubida =
-        (Date.now() - usuarioActual.ultimaSubidaDocumento.getTime()) / (1000 * 60 * 60)
+        (Date.now() - usuario.ultimaSubidaDocumento.getTime()) / (1000 * 60 * 60)
       if (horasDesdeUltimaSubida < 24) {
         throw new BadRequestException(
           'Solo puedes subir un documento una vez al día. Vuelve a intentarlo más tarde.',
@@ -75,28 +77,20 @@ export class UsuariosService {
       }
     }
 
-    const usuario = await this.usuarioModel
-      .findByIdAndUpdate(
-        userId,
-        {
-          verificacionEstado: 'procesando',
-          tipoDocumento,
-          administracion,
-          urlDocumento,
-          verificationConfidence: null,
-          verificationNotes: '',
-          verificationDate: null,
-          verificationType: null,
-          verificationAttempts: 0,
-          verificationLastError: '',
-          ultimaSubidaDocumento: new Date(),
-        },
-        { new: true },
-      )
-      .select('-password')
-      .lean()
-
-    if (!usuario) throw new NotFoundException('Usuario no encontrado')
+    Object.assign(usuario, {
+      verificacionEstado: 'procesando',
+      tipoDocumento,
+      administracion,
+      urlDocumento,
+      verificationConfidence: null,
+      verificationNotes: '',
+      verificationDate: null,
+      verificationType: null,
+      verificationAttempts: 0,
+      verificationLastError: '',
+      ultimaSubidaDocumento: new Date(),
+    })
+    await this.usuarioRepo.save(usuario)
 
     this.verificationDispatcher.enqueue(
       userId,
@@ -106,7 +100,8 @@ export class UsuariosService {
       userName || '',
     )
 
-    return usuario
+    const { password, ...result } = usuario
+    return result
   }
 
   async verificar(id: string, estado: string, motivoRechazo?: string) {
@@ -115,24 +110,19 @@ export class UsuariosService {
       throw new BadRequestException('Estado no válido')
     }
 
-    const usuario = await this.usuarioModel
-      .findByIdAndUpdate(
-        id,
-        {
-          verificacionEstado: estado,
-          motivoRechazo: estado === 'rechazado' ? motivoRechazo || '' : '',
-        },
-        { new: true },
-      )
-      .select('-password')
-      .lean()
-
+    const usuario = await this.usuarioRepo.findOneBy({ id })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
-    return usuario
+
+    usuario.verificacionEstado = estado
+    usuario.motivoRechazo = estado === 'rechazado' ? motivoRechazo || '' : ''
+    await this.usuarioRepo.save(usuario)
+
+    const { password, ...result } = usuario
+    return result
   }
 
   async deleteDocumento(userId: string) {
-    const usuario = await this.usuarioModel.findById(userId)
+    const usuario = await this.usuarioRepo.findOneBy({ id: userId })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
 
     if (!usuario.urlDocumento) {
@@ -149,54 +139,43 @@ export class UsuariosService {
       }
     }
 
-    const updated = await this.usuarioModel
-      .findByIdAndUpdate(
-        userId,
-        {
-          urlDocumento: null,
-          tipoDocumento: null,
-          administracion: null,
-          verificationConfidence: null,
-          verificationNotes: '',
-          verificationDate: null,
-          verificationType: null,
-        },
-        { new: true },
-      )
-      .select('-password')
-      .lean()
+    Object.assign(usuario, {
+      urlDocumento: null,
+      tipoDocumento: null,
+      administracion: null,
+      verificationConfidence: null,
+      verificationNotes: '',
+      verificationDate: null,
+      verificationType: null,
+    })
+    await this.usuarioRepo.save(usuario)
 
-    return updated
+    const { password, ...result } = usuario
+    return result
   }
 
   async resetUploadLimit(userId: string) {
-    const usuario = await this.usuarioModel
-      .findByIdAndUpdate(
-        userId,
-        { ultimaSubidaDocumento: null },
-        { new: true },
-      )
-      .select('-password')
-      .lean()
-
+    const usuario = await this.usuarioRepo.findOneBy({ id: userId })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
-    return usuario
+
+    usuario.ultimaSubidaDocumento = null as any
+    await this.usuarioRepo.save(usuario)
+
+    const { password, ...result } = usuario
+    return result
   }
 
   async reverify(id: string): Promise<{ mensaje: string }> {
-    const usuario = await this.usuarioModel.findById(id).select('-password').lean()
+    const usuario = await this.usuarioRepo.findOneBy({ id })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
     if (!usuario.urlDocumento) {
       throw new BadRequestException('El usuario no ha subido documentación')
     }
 
-    await this.usuarioModel
-      .findByIdAndUpdate(id, {
-        verificacionEstado: 'procesando',
-        verificationAttempts: 0,
-        verificationLastError: '',
-      })
-      .exec()
+    usuario.verificacionEstado = 'procesando'
+    usuario.verificationAttempts = 0
+    usuario.verificationLastError = ''
+    await this.usuarioRepo.save(usuario)
 
     this.verificationDispatcher.enqueue(
       id,

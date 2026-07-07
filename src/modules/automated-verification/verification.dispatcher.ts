@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
-import { UsuarioDocument } from '../usuarios/schemas/usuario.schema'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { AutomatedVerificationService } from './automated-verification.service'
 import { EmailService } from '../email/email.service'
 
@@ -13,7 +13,7 @@ export class VerificationDispatcher {
   private readonly maxDelayMs: number
 
   constructor(
-    @InjectModel('Usuario') private usuarioModel: Model<UsuarioDocument>,
+    @InjectRepository(UsuarioEntity) private usuarioRepo: Repository<UsuarioEntity>,
     private readonly verificationService: AutomatedVerificationService,
     private readonly emailService: EmailService,
   ) {
@@ -29,13 +29,12 @@ export class VerificationDispatcher {
     administracion: string,
     userName: string,
   ): void {
-    this.usuarioModel
-      .findByIdAndUpdate(userId, {
+    this.usuarioRepo
+      .update(userId, {
         verificacionEstado: 'procesando',
         verificationAttempts: 0,
         verificationLastError: '',
       })
-      .exec()
       .catch((err) => this.logger.error(`Error marcando procesando: ${err.message}`))
 
     this.processWithRetries(userId, documentUrl, tipoDocumento, administracion, userName, 0)
@@ -57,9 +56,8 @@ export class VerificationDispatcher {
         if (result.status === 'pendiente' && attempt < this.maxRetries) {
           const delay = Math.min(this.baseDelayMs * Math.pow(2, attempt), this.maxDelayMs)
           this.logger.log(`Reintentando OCR para ${userId} en ${delay}ms (intento ${attempt + 1}/${this.maxRetries})`)
-          await this.usuarioModel
-            .findByIdAndUpdate(userId, { verificationAttempts: attempt + 1 })
-            .exec()
+          await this.usuarioRepo
+            .update(userId, { verificationAttempts: attempt + 1 })
             .catch(() => {})
           setTimeout(
             () => this.processWithRetries(userId, documentUrl, tipoDocumento, administracion, userName, attempt + 1),
@@ -71,9 +69,8 @@ export class VerificationDispatcher {
       })
       .catch(async (error) => {
         this.logger.error(`OCR falló intento ${attempt + 1}/${this.maxRetries} para ${userId}: ${error.message}`)
-        await this.usuarioModel
-          .findByIdAndUpdate(userId, { verificationLastError: error.message })
-          .exec()
+        await this.usuarioRepo
+          .update(userId, { verificationLastError: error.message })
           .catch(() => {})
 
         if (attempt < this.maxRetries) {
@@ -95,23 +92,22 @@ export class VerificationDispatcher {
   }
 
   private async markPendingReviewManual(userId: string, result: any): Promise<void> {
-    await this.usuarioModel
-      .findByIdAndUpdate(userId, {
+    await this.usuarioRepo
+      .update(userId, {
         verificacionEstado: 'pendiente-revision-manual',
         verificationConfidence: result.confidence,
         verificationNotes: result.notes,
         verificationDate: new Date(),
         verificationType: 'automatic',
       })
-      .exec()
       .catch((err) => this.logger.error(`Error marcando revisión manual: ${err.message}`))
 
     try {
-      const admins = await this.usuarioModel
-        .find({ rol: 'admin' })
-        .select('email')
-        .lean()
-      const adminEmails = admins.map((a: any) => a.email).filter(Boolean)
+      const admins = await this.usuarioRepo.find({
+        where: { rol: 'admin' },
+        select: { email: true } as any,
+      })
+      const adminEmails = admins.map((a) => a.email).filter(Boolean)
 
       if (adminEmails.length > 0) {
         await this.emailService.sendManualReviewNotification(adminEmails, {
