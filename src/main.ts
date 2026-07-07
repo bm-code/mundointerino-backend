@@ -3,9 +3,14 @@ import { ValidationPipe } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import * as cookieParser from 'cookie-parser'
 import * as fs from 'fs'
+import * as crypto from 'crypto'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/http-exception.filter'
 import * as https from 'https'
+
+if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.randomUUID) {
+  ;(globalThis as any).crypto = crypto
+}
 
 async function bootstrap() {
   const googleCredsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
