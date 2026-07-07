@@ -55,7 +55,7 @@ export class AdminController {
   @Post('usuarios/:id/impersonate')
   impersonate(
     @Param('id') id: string,
-    @CurrentUser('_id') adminId: string,
+    @CurrentUser('id') adminId: string,
     @CurrentUser('isImpersonating') isImpersonating: boolean,
     @Res({ passthrough: true }) res: Response,
   ) {

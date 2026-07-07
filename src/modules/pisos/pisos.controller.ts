@@ -33,7 +33,7 @@ export class PisosController {
 
   @Get('mis-pisos')
   @UseGuards(JwtAuthGuard)
-  misPisos(@CurrentUser('_id') userId: string) {
+  misPisos(@CurrentUser('id') userId: string) {
     return this.pisosService.misPisos(userId)
   }
 
@@ -49,7 +49,7 @@ export class PisosController {
   async create(
     @Body() dto: CreatePisoDto,
     @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUser('_id') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     return this.pisosService.create(dto, files, userId)
   }
@@ -62,7 +62,7 @@ export class PisosController {
     @Param('id') id: string,
     @Body() body: any,
     @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUser('_id') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     const { activo, fotosActuales, ...rest } = body
     return this.pisosService.update(id, { ...rest, activoRaw: activo, fotosActuales }, files, userId)
@@ -73,7 +73,7 @@ export class PisosController {
   @RequireEmailVerified()
   toggleDisponibilidad(
     @Param('id') id: string,
-    @CurrentUser('_id') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     return this.pisosService.toggleDisponibilidad(id, userId)
   }
@@ -81,7 +81,7 @@ export class PisosController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @RequireEmailVerified()
-  remove(@Param('id') id: string, @CurrentUser('_id') userId: string) {
+  remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.pisosService.remove(id, userId)
   }
 }

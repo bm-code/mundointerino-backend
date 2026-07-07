@@ -34,19 +34,19 @@ export class UsuariosController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  getProfile(@CurrentUser('_id') userId: string) {
+  getProfile(@CurrentUser('id') userId: string) {
     return this.usuariosService.getProfile(userId)
   }
 
   @Put('me')
   @UseGuards(JwtAuthGuard)
-  updateProfile(@CurrentUser('_id') userId: string, @Body() dto: UpdateUsuarioDto) {
+  updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateUsuarioDto) {
     return this.usuariosService.updateProfile(userId, dto)
   }
 
   @Put('me/password')
   @UseGuards(JwtAuthGuard)
-  changePassword(@CurrentUser('_id') userId: string, @Body() dto: ChangePasswordDto) {
+  changePassword(@CurrentUser('id') userId: string, @Body() dto: ChangePasswordDto) {
     return this.usuariosService.changePassword(userId, dto)
   }
 
@@ -59,7 +59,7 @@ export class UsuariosController {
     }),
   )
   async uploadVerificacion(
-    @CurrentUser('_id') userId: string,
+    @CurrentUser('id') userId: string,
     @CurrentUser('nombre') userName: string,
     @Body() dto: VerificacionDto,
     @UploadedFile() file: Express.Multer.File,
@@ -84,7 +84,7 @@ export class UsuariosController {
 
   @Delete('documento')
   @UseGuards(JwtAuthGuard)
-  async deleteDocumento(@CurrentUser('_id') userId: string) {
+  async deleteDocumento(@CurrentUser('id') userId: string) {
     await this.usuariosService.deleteDocumento(userId)
     return { mensaje: 'Documento eliminado correctamente' }
   }
