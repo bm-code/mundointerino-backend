@@ -27,7 +27,7 @@ async function bootstrap() {
   app.use(cookieParser())
 
   const allowedOrigins: string[] = (
-    configService.get<string>('ALLOWED_ORIGINS') ||
+    process.env.ALLOWED_ORIGINS ||
     'http://localhost:5173,http://localhost:5174'
   )
     .split(',')
