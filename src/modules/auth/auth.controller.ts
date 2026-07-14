@@ -87,7 +87,7 @@ export class AuthController {
   }
 
   @Throttle({ default: { limit: 3, ttl: 60000 } })
-  @Post('reenviar-verificacion-email')
+  @Post('reenviar-verificacion')
   @HttpCode(HttpStatus.ACCEPTED)
   reenviarVerificacion(@Body() dto: ReenviarVerificacionDto) {
     return this.authService.reenviarVerificacion(dto)
