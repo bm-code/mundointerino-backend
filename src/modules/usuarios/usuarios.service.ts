@@ -67,6 +67,12 @@ export class UsuariosService {
     const usuario = await this.usuarioRepo.findOneBy({ id: userId })
     if (!usuario) throw new NotFoundException('Usuario no encontrado')
 
+    if (usuario.rol !== 'docente') {
+      throw new BadRequestException(
+        'La verificación documental es solo para interinos. Los propietarios son verificados manualmente por el equipo.',
+      )
+    }
+
     if (usuario.ultimaSubidaDocumento) {
       const horasDesdeUltimaSubida =
         (Date.now() - usuario.ultimaSubidaDocumento.getTime()) / (1000 * 60 * 60)

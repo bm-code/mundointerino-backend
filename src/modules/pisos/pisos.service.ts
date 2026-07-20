@@ -2,10 +2,9 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository, Like, LessThanOrEqual } from 'typeorm'
+import { Repository, Like, LessThanOrEqual, MoreThanOrEqual, Between } from 'typeorm'
 import { PisoEntity } from '../../database/entities/piso.entity'
 import { randomUUID } from 'crypto'
 import { CreatePisoDto } from './dto/create-piso.dto'
@@ -40,8 +39,16 @@ export class PisosService {
     if (query.provincia) filtro.provincia = Like(`%${query.provincia}%`)
     if (query.ciudad) filtro.ciudad = Like(`%${query.ciudad}%`)
     if (query.tipo) filtro.tipoEstancia = query.tipo
-    if (query.precioMax) filtro.precio = LessThanOrEqual(query.precioMax)
-    if (query.habitaciones) filtro.habitaciones = query.habitaciones
+    if (query.precioMin && query.precioMax) {
+      filtro.precio = Between(Number(query.precioMin), Number(query.precioMax))
+    } else if (query.precioMin) {
+      filtro.precio = MoreThanOrEqual(Number(query.precioMin))
+    } else if (query.precioMax) {
+      filtro.precio = LessThanOrEqual(Number(query.precioMax))
+    }
+    if (query.habitaciones) filtro.habitaciones = MoreThanOrEqual(Number(query.habitaciones))
+    if (query.banos) filtro.banos = MoreThanOrEqual(Number(query.banos))
+    if (query.metrosMin) filtro.metros = MoreThanOrEqual(Number(query.metrosMin))
 
     const pagina = query.pagina || 1
     const limite = query.limite || 12

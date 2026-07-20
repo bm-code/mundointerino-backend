@@ -22,6 +22,12 @@ export class QueryPisoDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  precioMin?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   precioMax?: number
 
   @IsOptional()
@@ -29,6 +35,18 @@ export class QueryPisoDto {
   @IsNumber()
   @Min(1)
   habitaciones?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  banos?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  metrosMin?: number
 
   @IsOptional()
   @Type(() => Number)
