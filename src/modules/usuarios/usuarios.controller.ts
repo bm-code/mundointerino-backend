@@ -51,7 +51,8 @@ export class UsuariosController {
   }
 
   @Post('verificacion-docente')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('docente')
   @UseInterceptors(
     FileInterceptor('documento', {
       storage: verificationStorage,

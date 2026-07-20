@@ -161,26 +161,36 @@ export class AutomatedVerificationService {
   private convertToImageUrl(url: string): string {
     if (!url) return ''
 
-    if (url.endsWith('.pdf') || url.includes('/raw/upload/')) {
-      const cloudName = this.configService.get('CLOUDINARY_CLOUD_NAME')
+    // Solo necesitamos transformar si es PDF (raw upload o image upload almacenado como pdf)
+    const esPdf = url.toLowerCase().endsWith('.pdf')
+  const esRaw = url.includes('/raw/upload/')
+    if (!esPdf && !esRaw) return url
 
-      if (url.includes('cloudinary.com') && cloudName) {
-        let result = url
-          .replace(`/raw/upload/`, '/image/upload/pg_1/')
-          .replace('.pdf', '.png')
-
-        if (!/\.(png|jpg|jpeg|webp|gif|bmp)(\?|$)/i.test(result)) {
-          result += '.png'
-        }
-
-        return result
+    const cloudName = this.configService.get('CLOUDINARY_CLOUD_NAME')
+    if (url.includes('cloudinary.com') && cloudName) {
+      let result = url
+      // /raw/upload/<version>/<file>.pdf → /image/upload/pg_1/<version>/<file>.png
+      if (result.includes('/raw/upload/')) {
+        result = result.replace('/raw/upload/', '/image/upload/pg_1/')
+      } else if (result.includes('/image/upload/')) {
+        // /image/upload/<version>/<file>.pdf → /image/upload/pg_1/<version>/<file>.png
+        // (Cloudinary acepta transformaciones justo después de /image/upload/)
+        result = result.replace('/image/upload/', '/image/upload/pg_1/')
       }
-
-      if (url.endsWith('.pdf')) {
-        return url.replace('.pdf', '.png')
+      // Cambiar extensión final .pdf → .png
+      if (result.toLowerCase().endsWith('.pdf')) {
+        result = result.replace(/\.pdf$/i, '.png')
       }
+      // Asegurar extensión de imagen (Cloudinary la necesita para aplicar la transformación)
+      if (!/\.(png|jpg|jpeg|webp|gif|bmp)(\?|$)/i.test(result)) {
+        result += '.png'
+      }
+      return result
     }
 
+    // Fuera de Cloudinary no podemos convertir, devolvemos la URL original
+    // y dejamos que el provider intente (Google Vision asyncBatch o Tesseract)
+    // o falle con un mensaje claro.
     return url
   }
 
@@ -205,7 +215,7 @@ export class AutomatedVerificationService {
 
     const nameResult = this.checkName(text, normalizedName)
     const docTypeResult = this.checkDocumentType(text, rules)
-    const interinoResult = this.checkInterinoKeywords(text)
+    const interinoResult = this.checkInterinoKeywords(text, rules.interinoKeywords)
     const adminResult = this.checkAdminKeywords(text, administration, rules)
 
     const confidence =
@@ -270,12 +280,23 @@ export class AutomatedVerificationService {
     return { found, score }
   }
 
-  private checkInterinoKeywords(text: string): { found: boolean; score: number } {
-    const normalizedKeywords = INTERINO_GENERAL_KEYWORDS.map((k) => this.normalizeText(k))
+  private checkInterinoKeywords(
+    text: string,
+    docTypeKeywords: string[] = [],
+  ): { found: boolean; score: number } {
+    // Combinar keywords generales + específicas del tipo documental.
+    const allKeywords = Array.from(new Set([...INTERINO_GENERAL_KEYWORDS, ...docTypeKeywords]))
+    const normalizedKeywords = allKeywords.map((k) => this.normalizeText(k))
     const matches = normalizedKeywords.filter((kw) => text.includes(kw))
-    const found = matches.length > 0
-    const score = found ? 25 : 0
-    return { found, score }
+    if (matches.length === 0) {
+      return { found: false, score: 0 }
+    }
+    // Crédito proporcional en vez de all-or-nothing:
+    // 1 coincidencia = 10 pts (suficiente para llegar a 80 con name+docType+admin),
+    // 2 = 20, 3+ = 25. Esto permite auto-verificar nóminas que contengan
+    // "personal interino" o "funcionario interino" una sola vez.
+    const score = Math.min(matches.length * 10, 25)
+    return { found: true, score }
   }
 
   private checkAdminKeywords(
