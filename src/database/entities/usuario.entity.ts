@@ -41,7 +41,10 @@ export class UsuarioEntity {
   administracion: string
 
   @Column({ nullable: true })
-  urlDocumento: string
+  urlDocumento: string | null
+
+  @Column({ type: 'timestamp', nullable: true })
+  documentUrlDeletedAt: Date | null
 
   @Column({ type: 'float', nullable: true })
   verificationConfidence: number

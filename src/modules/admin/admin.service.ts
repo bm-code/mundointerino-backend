@@ -13,6 +13,7 @@ import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { ImpersonationAuditEntity } from '../../database/entities/impersonation-audit.entity'
 import { RefreshTokenEntity } from '../../database/entities/refresh-token.entity'
 import { setAuthCookies, getCookieConfig, CookieConfig } from '../auth/cookies.util'
+import { UploadService } from '../cloudinary/cloudinary.service'
 
 @Injectable()
 export class AdminService {
@@ -27,6 +28,7 @@ export class AdminService {
     @InjectRepository(ImpersonationAuditEntity) private auditRepo: Repository<ImpersonationAuditEntity>,
     @InjectRepository(RefreshTokenEntity) private refreshTokenRepo: Repository<RefreshTokenEntity>,
     private readonly jwtService: JwtService,
+    private readonly uploadService: UploadService,
   ) {
     this.jwtAccessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || ''
     this.jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || this.jwtAccessSecret
@@ -151,6 +153,12 @@ export class AdminService {
     }
 
     await this.usuarioRepo.update(id, update)
+
+    // RGPD — minimización: al verificar manualmente, eliminar el documento de Cloudinary.
+    if (data.verificacionEstado === 'verificado') {
+      await this.cleanupDocumentUrl(id)
+    }
+
     return this.usuarioRepo.findOne({
       where: { id },
       select: {
@@ -175,6 +183,33 @@ export class AdminService {
         verificationLastError: true,
       },
     })
+  }
+
+  /**
+   * RGPD — minimización de datos.
+   * Elimina el documento de Cloudinary y limpia la URL del usuario.
+   * No lanza: si Cloudinary falla, queda en DB pero se loguea.
+   */
+  private async cleanupDocumentUrl(userId: string): Promise<void> {
+    try {
+      const usuario = await this.usuarioRepo.findOne({
+        where: { id: userId },
+        select: { id: true, urlDocumento: true },
+      })
+      if (!usuario?.urlDocumento) return
+      const ok = await this.uploadService.deleteByUrl(usuario.urlDocumento)
+      if (ok) {
+        await this.usuarioRepo.update(userId, {
+          urlDocumento: null,
+          documentUrlDeletedAt: new Date(),
+        })
+         
+        console.log(`[AdminService] Documento de ${userId} eliminado de Cloudinary (RGPD minimización)`)
+      }
+    } catch (err) {
+       
+      console.error(`[AdminService] Error limpiando urlDocumento de ${userId}: ${(err as Error).message}`)
+    }
   }
 
   async impersonate(adminId: string, targetId: string, isImpersonating: boolean, res: Response) {

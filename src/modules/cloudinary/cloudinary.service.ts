@@ -49,4 +49,38 @@ export class UploadService {
       }),
     )
   }
+
+  /**
+   * Elimina un recurso de Cloudinary a partir de su URL.
+   * Acepta tanto /image/upload/ como /raw/upload/ (PDFs).
+   * Retorna true si Cloudinary borró algo (o ya no existía); false si falló.
+   */
+  async deleteByUrl(url: string): Promise<boolean> {
+    if (!url || typeof url !== 'string') return false
+    try {
+      const publicId = extractPublicId(url)
+      if (!publicId) return false
+      // resource_type: 'image' cubre jpg/png y también PDFs subidos con resource_type:'image'
+      const res = await cloudinary.uploader.destroy(publicId, { resource_type: 'image' })
+      return res?.result === 'ok' || res?.result === 'not found'
+    } catch (err) {
+      // Si el resource_type no es image, probar con raw (PDFs convertidos manualmente).
+      try {
+        const publicId = extractPublicId(url)
+        if (!publicId) return false
+        const res = await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' })
+        return res?.result === 'ok' || res?.result === 'not found'
+      } catch (err2) {
+         
+        console.error('Cloudinary deleteByUrl falló:', (err2 as Error).message)
+        return false
+      }
+    }
+  }
+}
+
+function extractPublicId(url: string): string | null {
+  const match = url.match(/\/(?:image|raw)\/upload\/(?:v\d+\/)?(.+?)$/)
+  if (!match) return null
+  return match[1].replace(/\.[^.]+$/, '')
 }

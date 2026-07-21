@@ -14,6 +14,7 @@ import {
 import { OcrProvider, OCR_PROVIDER } from './ocr/ocr-provider.interface'
 import { buildNotesES, translateNote } from './translation'
 import { EmailService } from '../email/email.service'
+import { UploadService } from '../cloudinary/cloudinary.service'
 
 @Injectable()
 export class AutomatedVerificationService {
@@ -27,6 +28,7 @@ export class AutomatedVerificationService {
     private configService: ConfigService,
     @Inject(OCR_PROVIDER) private ocrProvider: OcrProvider,
     private emailService: EmailService,
+    private uploadService: UploadService,
   ) {
     this.confidenceThreshold =
       Number(configService.get('VERIFICATION_CONFIDENCE_THRESHOLD')) || CONFIDENCE_AUTO_VERIFY
@@ -114,6 +116,12 @@ export class AutomatedVerificationService {
       `Usuario ${userId} verificación: estado=${estado}, confianza=${result.confidence}, intento=${attempt}`,
     )
 
+    // RGPD — minimización: si el documento queda verificado, eliminar de Cloudinary
+    // y marcar urlDocumento=NULL+fecha de eliminación para auditoría.
+    if (estado === 'verificado') {
+      await this.cleanupDocumentUrl(userId)
+    }
+
     if (estado === 'pendiente-revision-manual') {
       try {
         const usuario = await this.usuarioRepo.findOne({ where: { id: userId }, select: { nombre: true, email: true, tipoDocumento: true, administracion: true } })
@@ -132,6 +140,33 @@ export class AutomatedVerificationService {
       } catch (err) {
         this.logger.error(`Error enviando notificación de revisión manual: ${(err as Error).message}`)
       }
+    }
+  }
+
+  /**
+   * RGPD — minimización de datos.
+   * Elimina el documento de Cloudinary y limpia la URL del usuario.
+   * No lanza: si Cloudinary falla, queda en DB pero se loguea (no bloquea verificación).
+   */
+  private async cleanupDocumentUrl(userId: string): Promise<void> {
+    try {
+      const usuario = await this.usuarioRepo.findOne({
+        where: { id: userId },
+        select: { id: true, urlDocumento: true },
+      })
+      if (!usuario?.urlDocumento) return
+      const ok = await this.uploadService.deleteByUrl(usuario.urlDocumento)
+      if (ok) {
+        await this.usuarioRepo.update(userId, {
+          urlDocumento: null,
+          documentUrlDeletedAt: new Date(),
+        })
+        this.logger.log(`Documento de ${userId} eliminado de Cloudinary (RGPD minimización)`)
+      } else {
+        this.logger.warn(`No se pudo eliminar documento de ${userId} en Cloudinary; url conservada para relanzar cleanup`)
+      }
+    } catch (err) {
+      this.logger.error(`Error limpiando urlDocumento de ${userId}: ${(err as Error).message}`)
     }
   }
 

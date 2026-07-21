@@ -5,6 +5,7 @@ import { AutomatedVerificationService } from './automated-verification.service'
 import { VerificationDispatcher } from './verification.dispatcher'
 import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { EmailModule } from '../email/email.module'
+import { CloudinaryModule } from '../cloudinary/cloudinary.module'
 import { OcrProvider, OCR_PROVIDER } from './ocr/ocr-provider.interface'
 import { createOcrProvider } from './ocr/ocr-provider.factory'
 import verificationConfig from '../../config/verification.config'
@@ -14,6 +15,7 @@ import verificationConfig from '../../config/verification.config'
     ConfigModule.forFeature(verificationConfig),
     TypeOrmModule.forFeature([UsuarioEntity]),
     EmailModule,
+    CloudinaryModule,
   ],
   providers: [
     AutomatedVerificationService,

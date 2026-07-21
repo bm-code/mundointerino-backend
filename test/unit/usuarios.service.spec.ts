@@ -5,6 +5,7 @@ import { UsuariosService } from '../../src/modules/usuarios/usuarios.service'
 import { UsuarioEntity } from '../../src/database/entities/usuario.entity'
 import { AutomatedVerificationService } from '../../src/modules/automated-verification/automated-verification.service'
 import { VerificationDispatcher } from '../../src/modules/automated-verification/verification.dispatcher'
+import { UploadService } from '../../src/modules/cloudinary/cloudinary.service'
 import * as bcrypt from 'bcryptjs'
 
 describe('UsuariosService', () => {
@@ -22,6 +23,12 @@ describe('UsuariosService', () => {
   const mockVerificationDispatcher = {
     enqueue: jest.fn(),
   }
+  const mockUploadService = {
+    uploadImages: jest.fn(),
+    uploadDocument: jest.fn(),
+    deleteImages: jest.fn(),
+    deleteByUrl: jest.fn().mockResolvedValue(true),
+  }
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -35,6 +42,10 @@ describe('UsuariosService', () => {
         {
           provide: VerificationDispatcher,
           useValue: mockVerificationDispatcher,
+        },
+        {
+          provide: UploadService,
+          useValue: mockUploadService,
         },
       ],
     }).compile()

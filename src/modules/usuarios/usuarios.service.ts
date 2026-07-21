@@ -12,6 +12,7 @@ import { UpdateUsuarioDto } from './dto/update-usuario.dto'
 import { ChangePasswordDto } from './dto/change-password.dto'
 import { AutomatedVerificationService } from '../automated-verification/automated-verification.service'
 import { VerificationDispatcher } from '../automated-verification/verification.dispatcher'
+import { UploadService } from '../cloudinary/cloudinary.service'
 
 @Injectable()
 export class UsuariosService {
@@ -21,6 +22,7 @@ export class UsuariosService {
     @InjectRepository(UsuarioEntity) private usuarioRepo: Repository<UsuarioEntity>,
     private readonly automatedVerificationService: AutomatedVerificationService,
     private readonly verificationDispatcher: VerificationDispatcher,
+    private readonly uploadService: UploadService,
   ) {}
 
   async getProfile(userId: string) {
@@ -123,6 +125,11 @@ export class UsuariosService {
     usuario.motivoRechazo = estado === 'rechazado' ? motivoRechazo || '' : ''
     await this.usuarioRepo.save(usuario)
 
+    // RGPD — minimización: si queda verificado, eliminar el documento de Cloudinary.
+    if (estado === 'verificado') {
+      await this.cleanupDocumentUrl(usuario)
+    }
+
     const { password, ...result } = usuario
     return result
   }
@@ -145,6 +152,7 @@ export class UsuariosService {
       }
     }
 
+    const urlParaBorrar = usuario.urlDocumento
     Object.assign(usuario, {
       urlDocumento: null,
       tipoDocumento: null,
@@ -156,8 +164,33 @@ export class UsuariosService {
     })
     await this.usuarioRepo.save(usuario)
 
+    // RGPD — minimización: borrar el archivo en Cloudinary de forma no bloqueante.
+    await this.uploadService.deleteByUrl(urlParaBorrar).catch((err) => {
+      this.logger.error(`No se pudo borrar documento de Cloudinary (user ${userId}): ${(err as Error).message}`)
+    })
+
     const { password, ...result } = usuario
     return result
+  }
+
+  /**
+   * RGPD — minimización de datos.
+   * Elimina el documento de Cloudinary y limpia la URL del usuario.
+   * No lanza: si Cloudinary falla, queda en DB pero se loguea.
+   */
+  private async cleanupDocumentUrl(usuario: UsuarioEntity): Promise<void> {
+    if (!usuario.urlDocumento) return
+    const url = usuario.urlDocumento
+    const ok = await this.uploadService.deleteByUrl(url).catch((err) => {
+      this.logger.error(`Cloudinary deleteByUrl falló (user ${usuario.id}): ${(err as Error).message}`)
+      return false
+    })
+    if (ok) {
+      usuario.urlDocumento = null
+      usuario.documentUrlDeletedAt = new Date() as any
+      await this.usuarioRepo.save(usuario)
+      this.logger.log(`Documento de ${usuario.id} eliminado de Cloudinary (RGPD minimización)`)
+    }
   }
 
   async resetUploadLimit(userId: string) {

@@ -7,10 +7,12 @@ import { AdminService } from './admin.service'
 import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { ImpersonationAuditEntity } from '../../database/entities/impersonation-audit.entity'
 import { RefreshTokenEntity } from '../../database/entities/refresh-token.entity'
+import { CloudinaryModule } from '../cloudinary/cloudinary.module'
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([UsuarioEntity, ImpersonationAuditEntity, RefreshTokenEntity]),
+    CloudinaryModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: () => ({
