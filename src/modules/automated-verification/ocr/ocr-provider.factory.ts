@@ -9,9 +9,11 @@ export function createOcrProvider(config: {
 }): OcrProvider {
   const logger = new Logger('OcrProviderFactory')
 
-  if (config.provider === 'google-vision' || config.fallbackProvider === 'google-vision') {
-    throw new Error(
-      'Google Vision OCR fue deshabilitado (costo). Usá OCR_PROVIDER="tesseract".',
+  const requested = [config.provider, config.fallbackProvider]
+  if (requested.some((p) => p === 'google-vision')) {
+    logger.warn(
+      'Google Vision OCR fue deshabilitado (costo). Cayendo a Tesseract automáticamente. ' +
+        'Seteá OCR_PROVIDER="tesseract" para eliminar este warning.',
     )
   }
 
@@ -19,8 +21,8 @@ export function createOcrProvider(config: {
     tesseract: () => new TesseractProvider(config.timeoutMs),
   }
 
-  const primaryFactory = providers[config.provider] || providers.tesseract
-  const fallbackFactory = providers[config.fallbackProvider] || providers.tesseract
+  const primaryFactory = providers.tesseract
+  const fallbackFactory = providers.tesseract
 
   const primary = primaryFactory()
   const fallback = fallbackFactory()
