@@ -23,7 +23,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@google-cloud/vision": "^5.3.7",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.16",
     "@nestjs/config": "^4.0.2",

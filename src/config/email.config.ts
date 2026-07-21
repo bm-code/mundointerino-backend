@@ -10,4 +10,5 @@ export default registerAs('email', () => ({
   smtpPass: process.env.SMTP_PASS || '',
   smtpSecure: process.env.SMTP_SECURE === 'true',
   sendgridApiKey: process.env.SENDGRID_API_KEY || '',
+  manualReviewTo: process.env.MANUAL_REVIEW_TO || '',
 }))

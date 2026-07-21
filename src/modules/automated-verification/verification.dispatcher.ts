@@ -103,21 +103,25 @@ export class VerificationDispatcher {
       .catch((err) => this.logger.error(`Error marcando revisión manual: ${err.message}`))
 
     try {
-      const admins = await this.usuarioRepo.find({
-        where: { rol: 'admin' },
-        select: { email: true } as any,
-      })
+      const [usuario, admins] = await Promise.all([
+        this.usuarioRepo.findOne({
+          where: { id: userId },
+          select: { nombre: true, tipoDocumento: true, administracion: true } as any,
+        }),
+        this.usuarioRepo.find({
+          where: { rol: 'admin' },
+          select: { email: true } as any,
+        }),
+      ])
       const adminEmails = admins.map((a) => a.email).filter(Boolean)
 
-      if (adminEmails.length > 0) {
-        await this.emailService.sendManualReviewNotification(adminEmails, {
-          userName: '',
-          userId,
-          documentType: '',
-          administration: '',
-          confidence: result.confidence || 0,
-        })
-      }
+      await this.emailService.sendManualReviewNotification(adminEmails, {
+        userName: usuario?.nombre || '',
+        userId,
+        documentType: usuario?.tipoDocumento || '',
+        administration: usuario?.administracion || '',
+        confidence: result.confidence || 0,
+      })
     } catch (err) {
       this.logger.error(`Error enviando email de revisión manual: ${(err as Error).message}`)
     }

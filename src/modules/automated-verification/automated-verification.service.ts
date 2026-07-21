@@ -120,7 +120,7 @@ export class AutomatedVerificationService {
         const admins = await this.usuarioRepo.find({ where: { rol: 'admin' }, select: { email: true } })
         const adminEmails = admins.map((a) => a.email).filter(Boolean)
 
-        if (adminEmails.length > 0 && usuario) {
+        if (usuario) {
           await this.emailService.sendManualReviewNotification(adminEmails, {
             userName: usuario.nombre,
             userId,

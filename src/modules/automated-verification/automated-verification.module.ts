@@ -23,9 +23,10 @@ import verificationConfig from '../../config/verification.config'
       useFactory: (configService: ConfigService): OcrProvider => {
         return createOcrProvider({
           provider: configService.get<string>('OCR_PROVIDER') || 'tesseract',
-          fallbackProvider: configService.get<string>('OCR_FALLBACK_PROVIDER') || 'tesseract',
-          googleCredentials: configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS') || '',
-          timeoutMs: Number(configService.get<number>('VERIFICATION_TIMEOUT_MS')) || 60000,
+          fallbackProvider:
+            configService.get<string>('OCR_FALLBACK_PROVIDER') || 'tesseract',
+          timeoutMs:
+            Number(configService.get<number>('VERIFICATION_TIMEOUT_MS')) || 60000,
         })
       },
       inject: [ConfigService],

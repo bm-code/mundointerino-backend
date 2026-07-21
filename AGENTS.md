@@ -55,7 +55,7 @@ Todos corren con `ts-node` y cargan `dotenv/config` automáticamente.
 ## Verificación de usuarios (OCR) — `modules/automated-verification`
 
 - `OCR_PROVIDER` default **`tesseract`** en `config/verification.config.ts`; `.env` lo sobreescribe a `google-vision` con `OCR_FALLBACK_PROVIDER=tesseract`. Si Google Vision no tiene credenciales, la factory cae a Tesseract (`ocr-provider.factory.ts:24-27`).
-- Credenciales Google: `GOOGLE_APPLICATION_CREDENTIALS` (ruta a `google-service-account.json`, gitignored) **o** `GOOGLE_SERVICE_ACCOUNT_JSON` (JSON inline; `main.ts` lo escribe a la ruta al boot). En Railway usá la inline.
+- Credenciales Google: `GOOGLE_APPLICATION_CREDENTIALS` (ruta a `google-service-account.json`, gitignored) **o** `GOOGLE_SERVICE_ACCOUNT_JSON` (JSON inline). El `GoogleVisionProvider` lee el inline directamente como objeto `credentials` (sin I/O de archivos); `main.ts` también lo escribe al path como fallback. En Railway usá la inline. Si ninguna funciona, `isConfigured()` retorna `false` y la factory cae a Tesseract automáticamente.
 - `spa.traineddata` en la raíz del subproyecto es datos de entrenamiento Tesseract; no borrar.
 - Reglas y thresholds en `.env` (`VERIFICATION_*`) y `modules/automated-verification/rules/verification-rules.ts`.
 - Dispatcher con retries exponenciales (`MAX_RETRIES`, `BASE_DELAY_MS`, `MAX_DELAY_MS`).
