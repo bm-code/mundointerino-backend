@@ -40,7 +40,7 @@ export class UsuarioEntity {
   @Column({ nullable: true })
   administracion: string
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   urlDocumento: string | null
 
   @Column({ type: 'timestamp', nullable: true })
