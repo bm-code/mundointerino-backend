@@ -192,7 +192,14 @@ export class AuthService {
   }
 
   async me(usuario: any): Promise<{ usuario: UsuarioPublico }> {
-    return { usuario: this.usuarioPublico(usuario) }
+    // El usuario inyectado por el JwtAuthGuard viene del payload del JWT,
+    // que NO contiene nombre/email/telefono. Cargamos la entidad desde la DB
+    // para devolver el perfil completo (y fresco) al frontend.
+    const id = usuario?.sub ?? usuario?.id
+    if (!id) throw new UnauthorizedException('Usuario no identificado')
+    const entidad = await this.usuarioRepo.findOneBy({ id })
+    if (!entidad) throw new UnauthorizedException('Usuario no encontrado')
+    return { usuario: this.usuarioPublico(entidad) }
   }
 
   async logout(req: Request, res: Response): Promise<void> {
