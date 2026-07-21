@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core'
 import { ValidationPipe } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import * as cookieParser from 'cookie-parser'
-import * as fs from 'fs'
 import * as crypto from 'crypto'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/http-exception.filter'
@@ -13,12 +12,6 @@ if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.randomUUID) {
 }
 
 async function bootstrap() {
-  const googleCredsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
-  const googleCredsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
-  if (googleCredsPath && googleCredsJson && !fs.existsSync(googleCredsPath)) {
-    fs.writeFileSync(googleCredsPath, googleCredsJson, 'utf-8')
-    console.log(`Credenciales de Google escritas en ${googleCredsPath}`)
-  }
   const app = await NestFactory.create(AppModule)
   const configService = app.get(ConfigService)
 

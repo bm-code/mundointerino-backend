@@ -48,6 +48,7 @@ export class AdminService {
       pendientes,
       verificados,
       rechazados,
+      pendientesRevisionManual,
       usuariosRecientes,
       ultimosRegistrados,
     ] = await Promise.all([
@@ -58,6 +59,7 @@ export class AdminService {
       this.usuarioRepo.count({ where: { verificacionEstado: 'pendiente' } }),
       this.usuarioRepo.count({ where: { verificacionEstado: 'verificado' } }),
       this.usuarioRepo.count({ where: { verificacionEstado: 'rechazado' } }),
+      this.usuarioRepo.count({ where: { verificacionEstado: 'pendiente-revision-manual' } }),
       this.usuarioRepo.count({
         where: { createdAt: MoreThanOrEqual(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) },
       }),
@@ -75,6 +77,7 @@ export class AdminService {
         pendientes,
         verificados,
         rechazados,
+        pendientesRevisionManual,
         nuevosUltimoMes: usuariosRecientes,
       },
       ultimosRegistrados,
@@ -103,7 +106,27 @@ export class AdminService {
     const [usuarios, total] = await Promise.all([
       this.usuarioRepo.find({
         where,
-        select: { id: true, nombre: true, email: true, rol: true, telefono: true, verificacionEstado: true, administracion: true, emailVerificado: true, createdAt: true, motivoRechazo: true },
+        select: {
+          id: true,
+          nombre: true,
+          email: true,
+          rol: true,
+          telefono: true,
+          verificacionEstado: true,
+          administracion: true,
+          emailVerificado: true,
+          createdAt: true,
+          motivoRechazo: true,
+          tipoDocumento: true,
+          urlDocumento: true,
+          verificationConfidence: true,
+          verificationNotes: true,
+          verificationDate: true,
+          verificationType: true,
+          verificationProvider: true,
+          verificationAttempts: true,
+          verificationLastError: true,
+        },
         order: { createdAt: 'DESC' },
         skip: (page - 1) * limit,
         take: limit,
@@ -130,7 +153,27 @@ export class AdminService {
     await this.usuarioRepo.update(id, update)
     return this.usuarioRepo.findOne({
       where: { id },
-      select: { id: true, nombre: true, email: true, rol: true, telefono: true, verificacionEstado: true, administracion: true, emailVerificado: true, createdAt: true, motivoRechazo: true },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        telefono: true,
+        verificacionEstado: true,
+        administracion: true,
+        emailVerificado: true,
+        createdAt: true,
+        motivoRechazo: true,
+        tipoDocumento: true,
+        urlDocumento: true,
+        verificationConfidence: true,
+        verificationNotes: true,
+        verificationDate: true,
+        verificationType: true,
+        verificationProvider: true,
+        verificationAttempts: true,
+        verificationLastError: true,
+      },
     })
   }
 

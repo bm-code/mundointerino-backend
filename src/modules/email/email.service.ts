@@ -6,12 +6,20 @@ import { ConfigService } from '@nestjs/config'
 export class EmailService {
   private readonly logger = new Logger(EmailService.name)
   private readonly frontendUrl: string
+  private readonly manualReviewTo: string[]
 
   constructor(
     @Inject(EMAIL_PROVIDER) private provider: EmailProvider,
     private configService: ConfigService,
   ) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'
+    // Destinatarios hardcoded garantizados (además de los admins registrados en DB).
+    // CSV: MANUAL_REVIEW_TO="a@b.com,c@d.com"
+    const raw = this.configService.get<string>('MANUAL_REVIEW_TO') || process.env.MANUAL_REVIEW_TO || ''
+    this.manualReviewTo = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
   }
 
   async sendWithRetry(msg: EmailMessage, opts?: { maxAttempts?: number; swallow?: boolean }): Promise<void> {
@@ -51,16 +59,39 @@ export class EmailService {
     })
   }
 
+  /**
+   * Combina admins registrados con destinatarios hardcoded via MANUAL_REVIEW_TO.
+   * Deduplica por email (case-insensitive). Si no hay ningún destinatario,
+   * loggea warn pero no lanza (swallow true).
+   */
+  resolveManualReviewRecipients(adminEmails: string[]): string[] {
+    const seen = new Set<string>()
+    const all: string[] = []
+    for (const e of [...adminEmails, ...this.manualReviewTo]) {
+      const lower = (e || '').trim().toLowerCase()
+      if (!lower || seen.has(lower)) continue
+      seen.add(lower)
+      all.push(e)
+    }
+    if (!all.length) {
+      this.logger.warn(
+        'No hay destinatarios para revisión manual (admins DB vacío + MANUAL_REVIEW_TO vacío)',
+      )
+    }
+    return all
+  }
+
   async sendManualReviewNotification(
     adminEmails: string[],
     payload: { userName: string; userId: string; documentType: string; administration: string; confidence: number },
   ): Promise<void> {
-    if (!adminEmails.length) return
-    const link = `${this.frontendUrl}/admin?usuario=${payload.userId}`
+    const recipients = this.resolveManualReviewRecipients(adminEmails)
+    if (!recipients.length) return
+    const link = `${this.frontendUrl}/admin?usuario=${payload.userId}&estado=pendiente-revision-manual`
     const html = this.revisionManualHtml(payload, link)
     const text = this.revisionManualText(payload, link)
     await this.sendWithRetry({
-      to: adminEmails,
+      to: recipients,
       subject: `Revisión manual requerida: ${payload.userName}`,
       html,
       text,
