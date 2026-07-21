@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common'
 import { JwtModule } from '@nestjs/jwt'
 import { ConfigModule } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
-import { AdminController } from './admin.controller'
+import { AdminController, ImpersonationController } from './admin.controller'
 import { AdminService } from './admin.service'
 import { UsuarioEntity } from '../../database/entities/usuario.entity'
 import { ImpersonationAuditEntity } from '../../database/entities/impersonation-audit.entity'
@@ -20,7 +20,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module'
       }),
     }),
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, ImpersonationController],
   providers: [AdminService],
   exports: [AdminService],
 })
