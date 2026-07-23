@@ -21,10 +21,11 @@ export const verificationStorage = new CloudinaryStorage({
 
 export const pisosStorage = new CloudinaryStorage({
   cloudinary,
-  params: {
+  params: async (_req: any, file: Express.Multer.File) => ({
     folder: 'mundointerino/pisos',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    resource_type: 'image',
+    resource_type: 'image' as const,
+    public_id: `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
     transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
-  } as any,
+  }),
 })

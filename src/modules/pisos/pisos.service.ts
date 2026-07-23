@@ -170,8 +170,10 @@ export class PisosService {
       }
     }
 
+    const { fotosActuales: _fotosActuales, activoRaw: _activoRaw, ...dtoLimpio } = dto as any
+
     await this.pisoRepo.update(id, {
-      ...dto,
+      ...dtoLimpio,
       ciudadSlug,
       comunidad,
       provincia,
