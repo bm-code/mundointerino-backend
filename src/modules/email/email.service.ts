@@ -99,6 +99,24 @@ export class EmailService {
     })
   }
 
+  async sendVerificationStatusNotification(
+    to: string,
+    payload: { userName: string; estado: string; motivoRechazo?: string },
+  ): Promise<void> {
+    const html = this.verificacionEstadoHtml(payload)
+    const text = this.verificacionEstadoText(payload)
+    const subject = payload.estado === 'verificado'
+      ? '¡Tu cuenta ha sido verificada! - Mundointerino'
+      : 'Actualización sobre tu verificación - Mundointerino'
+    await this.sendWithRetry({
+      to,
+      subject,
+      html,
+      text,
+      meta: { type: 'verification-status', estado: payload.estado },
+    })
+  }
+
   private verificarEmailHtml(link: string): string {
     return `<!DOCTYPE html>
 <html lang="es">
@@ -161,5 +179,45 @@ Administración: ${p.administration}
 Confianza OCR: ${p.confidence}%
 
 Revisa el documento en: ${link}`
+  }
+
+  private verificacionEstadoHtml(p: { userName: string; estado: string; motivoRechazo?: string }): string {
+    const esVerificado = p.estado === 'verificado'
+    const titulo = esVerificado ? '¡Cuenta verificada!' : 'Actualización de verificación'
+    const color = esVerificado ? '#16a34a' : '#dc2626'
+    const mensaje = esVerificado
+      ? 'Tu cuenta ha sido verificada correctamente. Ya puedes acceder a todas las funciones de Mundointerino.'
+      : `Tu verificación no ha sido aprobada.${p.motivoRechazo ? ` Motivo: ${p.motivoRechazo}` : ''}`
+
+    return `<!DOCTYPE html>
+<html lang="es">
+<body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+  <h2 style="color:${color}">${titulo}</h2>
+  <p>Hola, ${p.userName}:</p>
+  <p>${mensaje}</p>
+  <p style="margin:30px 0">
+    <a href="${this.frontendUrl}/perfil" style="background:${color};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block">Ver mi perfil</a>
+  </p>
+  <p style="color:#6b7280;font-size:14px">Si tienes dudas, contacta con nosotros respondiendo a este correo.</p>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+  <p style="color:#9ca3af;font-size:12px">Mundointerino — Plataforma de interinos</p>
+</body>
+</html>`
+  }
+
+  private verificacionEstadoText(p: { userName: string; estado: string; motivoRechazo?: string }): string {
+    const esVerificado = p.estado === 'verificado'
+    const mensaje = esVerificado
+      ? 'Tu cuenta ha sido verificada correctamente. Ya puedes acceder a todas las funciones de Mundointerino.'
+      : `Tu verificación no ha sido aprobada.${p.motivoRechazo ? ` Motivo: ${p.motivoRechazo}` : ''}`
+    return `${esVerificado ? 'Cuenta verificada' : 'Actualización de verificación'}
+
+Hola, ${p.userName}:
+
+${mensaje}
+
+Visita tu perfil: ${this.frontendUrl}/perfil
+
+Mundointerino — Plataforma de interinos`
   }
 }

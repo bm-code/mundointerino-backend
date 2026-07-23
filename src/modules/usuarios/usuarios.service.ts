@@ -127,6 +127,14 @@ export class UsuariosService {
     usuario.motivoRechazo = estado === 'rechazado' ? motivoRechazo || '' : ''
     await this.usuarioRepo.save(usuario)
 
+    if (estado === 'verificado' || estado === 'rechazado') {
+      this.emailService.sendVerificationStatusNotification(usuario.email, {
+        userName: usuario.nombre,
+        estado,
+        motivoRechazo: estado === 'rechazado' ? motivoRechazo : undefined,
+      }).catch((err) => this.logger.error(`Error enviando email de estado de verificación: ${(err as Error).message}`))
+    }
+
     // RGPD — minimización: si queda verificado, eliminar el documento de Cloudinary.
     if (estado === 'verificado') {
       await this.cleanupDocumentUrl(usuario)
