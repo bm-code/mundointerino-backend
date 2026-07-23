@@ -119,6 +119,10 @@ export class PisosService {
 
     const data = {
       ...dto,
+      precioDia: dto.precioDia || null,
+      fianza: dto.fianza || null,
+      metros: dto.metros || null,
+      banos: dto.banos || null,
       ciudadSlug,
       comunidad,
       provincia,
@@ -174,6 +178,10 @@ export class PisosService {
 
     await this.pisoRepo.update(id, {
       ...dtoLimpio,
+      precioDia: dto.precioDia || null,
+      fianza: dto.fianza || null,
+      metros: dto.metros || null,
+      banos: dto.banos || null,
       ciudadSlug,
       comunidad,
       provincia,
