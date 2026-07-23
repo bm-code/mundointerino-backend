@@ -74,12 +74,6 @@ export class PisoEntity {
   @Column({ default: '' })
   provincia: string
 
-  @Column({ type: 'float', nullable: true })
-  lat: number
-
-  @Column({ type: 'float', nullable: true })
-  lng: number
-
   @ManyToOne(() => UsuarioEntity, (usuario) => usuario.pisos)
   @JoinColumn({ name: 'propietarioId' })
   propietario: UsuarioEntity
