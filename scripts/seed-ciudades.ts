@@ -131,11 +131,21 @@ async function seedCiudades() {
   const municipiosPath = path.join(scriptsDir, 'lista_municipios.sql')
 
   if (!fs.existsSync(ccaaPath) || !fs.existsSync(provinciasPath) || !fs.existsSync(municipiosPath)) {
-    console.error('Faltan archivos SQL del INE. Ejecuta primero:')
-    console.error('  curl -o scripts/lista_CCAA.sql https://raw.githubusercontent.com/oscarnovasf/ccaa-provincias-municipios/master/sql/lista_CCAA.sql')
-    console.error('  curl -o scripts/lista_provincias.sql https://raw.githubusercontent.com/oscarnovasf/ccaa-provincias-municipios/master/sql/lista_provincias.sql')
-    console.error('  curl -o scripts/lista_municipios.sql https://raw.githubusercontent.com/oscarnovasf/ccaa-provincias-municipios/master/sql/lista_municipios.sql')
-    process.exit(1)
+    console.log('Archivos SQL del INE no encontrados, descargando...')
+    const baseUrl = 'https://raw.githubusercontent.com/oscarnovasf/ccaa-provincias-municipios/master/sql'
+    const files = [
+      { url: `${baseUrl}/lista_CCAA.sql`, dest: ccaaPath },
+      { url: `${baseUrl}/lista_provincias.sql`, dest: provinciasPath },
+      { url: `${baseUrl}/lista_municipios.sql`, dest: municipiosPath },
+    ]
+    for (const f of files) {
+      if (!fs.existsSync(f.dest)) {
+        const res = await fetch(f.url)
+        if (!res.ok) throw new Error(`Error descargando ${f.url}: ${res.status}`)
+        fs.writeFileSync(f.dest, await res.text())
+        console.log(`  ✓ ${path.basename(f.dest)}`)
+      }
+    }
   }
 
   console.log('=== Cargando datos del INE ===')
