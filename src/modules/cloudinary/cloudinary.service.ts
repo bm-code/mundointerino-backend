@@ -71,8 +71,6 @@ export class UploadService {
         const res = await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' })
         return res?.result === 'ok' || res?.result === 'not found'
       } catch (err2) {
-         
-        console.error('Cloudinary deleteByUrl falló:', (err2 as Error).message)
         return false
       }
     }

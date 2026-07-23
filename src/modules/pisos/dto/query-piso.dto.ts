@@ -52,6 +52,12 @@ export class QueryPisoDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
+  superficieMax?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
   pagina?: number
 
   @IsOptional()

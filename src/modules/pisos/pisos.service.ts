@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common'
@@ -26,6 +27,7 @@ function slugifyCiudad(text: string): string {
 
 @Injectable()
 export class PisosService {
+  private readonly logger = new Logger(PisosService.name)
   constructor(
     @InjectRepository(PisoEntity) private pisoRepo: Repository<PisoEntity>,
     private readonly uploadService: UploadService,
@@ -48,7 +50,13 @@ export class PisosService {
     }
     if (query.habitaciones) filtro.habitaciones = MoreThanOrEqual(Number(query.habitaciones))
     if (query.banos) filtro.banos = MoreThanOrEqual(Number(query.banos))
-    if (query.metrosMin) filtro.metros = MoreThanOrEqual(Number(query.metrosMin))
+    if (query.metrosMin && query.superficieMax) {
+      filtro.metros = Between(Number(query.metrosMin), Number(query.superficieMax))
+    } else if (query.metrosMin) {
+      filtro.metros = MoreThanOrEqual(Number(query.metrosMin))
+    } else if (query.superficieMax) {
+      filtro.metros = LessThanOrEqual(Number(query.superficieMax))
+    }
 
     const pagina = query.pagina || 1
     const limite = query.limite || 12
@@ -92,7 +100,10 @@ export class PisosService {
     files: Express.Multer.File[],
     userId: string,
   ) {
-    const fotos = files ? files.map(f => f.path) : []
+    const fotos = files ? files.filter(f => f.path && f.path !== 'undefined').map(f => f.path) : []
+    if (files && files.length > 0 && fotos.length === 0) {
+      this.logger.warn(`Recibidos ${files.length} archivos pero ninguno tiene URL válida. paths: ${files.map(f => String(f.path)).join(', ')}`)
+    }
 
     let comunidad = dto.comunidad || ''
     let provincia = dto.provincia || ''
@@ -139,10 +150,10 @@ export class PisosService {
         ? [dto.fotosActuales]
         : []
 
-    const fotosEliminadas = piso.fotos.filter(url => !fotosActuales.includes(url))
+    const fotosEliminadas = piso.fotos.filter(url => url && url !== 'undefined' && !fotosActuales.includes(url))
     await this.uploadService.deleteImages(fotosEliminadas)
 
-    const fotosNuevas = files ? files.map(f => f.path) : []
+    const fotosNuevas = files ? files.filter(f => f.path && f.path !== 'undefined').map(f => f.path) : []
     const activo = dto.activoRaw === true || dto.activoRaw === 'true'
 
     let comunidad = dto.comunidad || piso.comunidad || ''

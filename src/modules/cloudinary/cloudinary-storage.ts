@@ -24,6 +24,7 @@ export const pisosStorage = new CloudinaryStorage({
   params: {
     folder: 'mundointerino/pisos',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    resource_type: 'image',
     transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
   } as any,
 })

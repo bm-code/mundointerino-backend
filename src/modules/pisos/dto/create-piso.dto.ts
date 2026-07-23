@@ -89,4 +89,14 @@ export class CreatePisoDto {
   @IsOptional()
   @IsString()
   provincia?: string
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lat?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lng?: number
 }
