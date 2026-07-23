@@ -94,6 +94,9 @@ export class UsuarioEntity {
   @Column({ nullable: true })
   verificationJobId: string
 
+  @Column({ type: 'timestamp', nullable: true })
+  manualReviewRequestedAt: Date | null
+
   @CreateDateColumn()
   createdAt: Date
 

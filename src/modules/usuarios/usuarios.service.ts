@@ -13,6 +13,7 @@ import { ChangePasswordDto } from './dto/change-password.dto'
 import { AutomatedVerificationService } from '../automated-verification/automated-verification.service'
 import { VerificationDispatcher } from '../automated-verification/verification.dispatcher'
 import { UploadService } from '../cloudinary/cloudinary.service'
+import { EmailService } from '../email/email.service'
 
 @Injectable()
 export class UsuariosService {
@@ -23,6 +24,7 @@ export class UsuariosService {
     private readonly automatedVerificationService: AutomatedVerificationService,
     private readonly verificationDispatcher: VerificationDispatcher,
     private readonly uploadService: UploadService,
+    private readonly emailService: EmailService,
   ) {}
 
   async getProfile(userId: string) {
@@ -167,6 +169,36 @@ export class UsuariosService {
     // RGPD — minimización: borrar el archivo en Cloudinary de forma no bloqueante.
     await this.uploadService.deleteByUrl(urlParaBorrar).catch((err) => {
       this.logger.error(`No se pudo borrar documento de Cloudinary (user ${userId}): ${(err as Error).message}`)
+    })
+
+    const { password, ...result } = usuario
+    return result
+  }
+
+  async solicitarRevisionManual(userId: string) {
+    const usuario = await this.usuarioRepo.findOneBy({ id: userId })
+    if (!usuario) throw new NotFoundException('Usuario no encontrado')
+
+    if (!usuario.urlDocumento) {
+      throw new BadRequestException('No tienes un documento subido para revisar')
+    }
+
+    usuario.verificacionEstado = 'pendiente-revision-manual'
+    usuario.manualReviewRequestedAt = new Date() as any
+    await this.usuarioRepo.save(usuario)
+
+    const admins = await this.usuarioRepo.find({
+      where: { rol: 'admin' },
+      select: { email: true } as any,
+    })
+    const adminEmails = admins.map((a) => a.email).filter(Boolean)
+
+    await this.emailService.sendManualReviewNotification(adminEmails, {
+      userName: usuario.nombre,
+      userId,
+      documentType: usuario.tipoDocumento || '',
+      administration: usuario.administracion || '',
+      confidence: usuario.verificationConfidence || 0,
     })
 
     const { password, ...result } = usuario

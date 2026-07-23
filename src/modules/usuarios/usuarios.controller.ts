@@ -90,6 +90,13 @@ export class UsuariosController {
     return { mensaje: 'Documento eliminado correctamente' }
   }
 
+  @Post('solicitar-revision-manual')
+  @UseGuards(JwtAuthGuard)
+  async solicitarRevisionManual(@CurrentUser('id') userId: string) {
+    const usuario = await this.usuariosService.solicitarRevisionManual(userId)
+    return { mensaje: 'Revisión manual solicitada. Un administrador revisará tu documento.', usuario }
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
